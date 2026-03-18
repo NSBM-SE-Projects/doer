@@ -1,0 +1,12 @@
+{
+  "name": "doer",
+  "private": true,
+  "workspaces": [
+    "apps/backend",
+    "apps/admin"
+  ],
+  "scripts": {
+    "backend": "npm run dev --workspace=apps/backend",
+    "admin": "npm run dev --workspace=apps/admin"
+  }
+}

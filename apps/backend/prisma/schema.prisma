@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  WORKER
+  ADMIN
+}
+
+enum JobStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model User {
+  id                 String             @id @default(cuid())
+  firebaseUid        String             @unique
+  email              String             @unique
+  name               String
+  phone              String?
+  avatarUrl          String?
+  role               Role
+  isActive           Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  customerProfile    CustomerProfile?
+  workerProfile      WorkerProfile?
+
+  sentMessages       Message[]          @relation("SentMessages")
+  notifications      Notification[]
+}
+
+model CustomerProfile {
+  id        String  @id @default(cuid())
+  userId    String  @unique
+  address   String?
+  latitude  Float?
+  longitude Float?
+
+  user      User    @relation(fields: [userId], references: [id])
+  jobs      Job[]
+  reviews   Review[]
+}
+
+model WorkerProfile {
+  id                 String             @id @default(cuid())
+  userId             String             @unique
+  bio                String?
+  latitude           Float?
+  longitude          Float?
+  nicNumber          String?
+  verificationStatus VerificationStatus @default(PENDING)
+  isAvailable        Boolean            @default(true)
+  rating             Float              @default(0)
+  totalJobs          Int                @default(0)
+
+  user               User               @relation(fields: [userId], references: [id])
+  categories         WorkerCategory[]
+  jobs               Job[]
+  reviews            Review[]
+}
+
+model ServiceCategory {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  description String?
+  iconUrl     String?
+
+  workers     WorkerCategory[]
+  jobs        Job[]
+}
+
+model WorkerCategory {
+  workerId   String
+  categoryId String
+
+  worker     WorkerProfile   @relation(fields: [workerId], references: [id])
+  category   ServiceCategory @relation(fields: [categoryId], references: [id])
+
+  @@id([workerId, categoryId])
+}
+
+model Job {
+  id          String          @id @default(cuid())
+  title       String
+  description String
+  status      JobStatus       @default(OPEN)
+  price       Float?
+  latitude    Float?
+  longitude   Float?
+  address     String?
+  scheduledAt DateTime?
+  completedAt DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  customerId  String
+  workerId    String?
+  categoryId  String
+
+  customer    CustomerProfile @relation(fields: [customerId], references: [id])
+  worker      WorkerProfile?  @relation(fields: [workerId], references: [id])
+  category    ServiceCategory @relation(fields: [categoryId], references: [id])
+
+  messages    Message[]
+  review      Review?
+  payment     Payment?
+}
+
+model Review {
+  id         String          @id @default(cuid())
+  rating     Int
+  comment    String?
+  createdAt  DateTime        @default(now())
+
+  jobId      String          @unique
+  customerId String
+  workerId   String
+
+  job        Job             @relation(fields: [jobId], references: [id])
+  customer   CustomerProfile @relation(fields: [customerId], references: [id])
+  worker     WorkerProfile   @relation(fields: [workerId], references: [id])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+
+  jobId     String
+  senderId  String
+
+  job       Job      @relation(fields: [jobId], references: [id])
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id])
+}
+
+model Payment {
+  id            String   @id @default(cuid())
+  amount        Float
+  status        String   @default("PENDING")
+  payhereRef    String?
+  createdAt     DateTime @default(now())
+
+  jobId         String   @unique
+  job           Job      @relation(fields: [jobId], references: [id])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+}
