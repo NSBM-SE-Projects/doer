@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/auth_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // PROFILE SCREEN
@@ -145,7 +146,33 @@ class ProfileScreen extends StatelessWidget {
               width: double.infinity,
               height: AppSizing.buttonHeight,
               child: OutlinedButton.icon(
-                onPressed: () {},
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Sign Out'),
+                      content: const Text('Are you sure you want to sign out?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: Text('Sign Out',
+                              style: TextStyle(color: AppColors.error)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true && context.mounted) {
+                    await AuthService().signOut();
+                    if (context.mounted) {
+                      Navigator.pushNamedAndRemoveUntil(
+                          context, '/splash', (route) => false);
+                    }
+                  }
+                },
                 icon: const Icon(Icons.logout_rounded,
                     size: 18, color: AppColors.error),
                 label: Text('Sign Out',

@@ -5,7 +5,6 @@
 
 import 'package:flutter/material.dart';
 import '../services/location_service.dart';
-import 'package:geolocator/geolocator.dart';
 
 class RecommendationsScreen extends StatefulWidget {
   final String householdId;
@@ -13,11 +12,11 @@ class RecommendationsScreen extends StatefulWidget {
   final List<String> neededServices;
 
   const RecommendationsScreen({
-    Key? key,
+    super.key,
     required this.householdId,
     required this.district,
     required this.neededServices,
-  }) : super(key: key);
+  });
 
   @override
   State<RecommendationsScreen> createState() => _RecommendationsScreenState();
@@ -151,9 +150,9 @@ class _WorkerCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: _scoreColor(score).withOpacity(0.1),
+                color: _scoreColor(score).withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: _scoreColor(score).withOpacity(0.4)),
+                border: Border.all(color: _scoreColor(score).withValues(alpha:0.4)),
               ),
               child: Text(
                 '$score%',
