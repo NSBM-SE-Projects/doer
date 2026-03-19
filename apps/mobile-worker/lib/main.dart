@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
 
 // ──────────────────────────────────────────────────────────────
 // MAIN ENTRY POINT (Worker App)
-// Starts at SplashScreen, uses onGenerateRoute for navigation.
-// Same warm gold theme as the customer app for brand consistency.
+// Initializes Firebase before runApp, then starts at SplashScreen.
 // ──────────────────────────────────────────────────────────────
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,

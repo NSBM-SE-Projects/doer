@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/auth_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // FORGOT PASSWORD SCREEN
@@ -16,13 +17,35 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
+  final _authService = AuthService();
   bool _isLoading = false;
   bool _emailSent = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
     _emailController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleReset() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() => _errorMessage = 'Please enter your email address');
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      await _authService.resetPassword(email: email);
+      if (mounted) setState(() { _isLoading = false; _emailSent = true; });
+    } catch (e) {
+      if (mounted) {
+        setState(() { _errorMessage = e.toString(); _isLoading = false; });
+      }
+    }
   }
 
   @override
@@ -73,21 +96,35 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
         const SizedBox(height: 32),
 
+        if (_errorMessage != null) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.errorLight,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline_rounded,
+                    color: AppColors.error, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _errorMessage!,
+                    style: AppTypography.bodySmall
+                        .copyWith(color: AppColors.error),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         DoerButton(
           label: 'Send Reset Link',
           isLoading: _isLoading,
-          onPressed: () {
-            setState(() => _isLoading = true);
-            // TODO: Call Firebase Auth sendPasswordResetEmail
-            Future.delayed(const Duration(seconds: 1), () {
-              if (mounted) {
-                setState(() {
-                  _isLoading = false;
-                  _emailSent = true;
-                });
-              }
-            });
-          },
+          onPressed: _handleReset,
         ),
       ],
     );
