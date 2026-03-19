@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/router/app_router.dart';
+import '../../jobs/screens/job_detail_screen.dart';
 
 // ──────────────────────────────────────────────────────────────
 // DASHBOARD SCREEN
@@ -57,18 +59,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     // Notification bell
                     Stack(
                       children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          child: const Icon(
-                            Icons.notifications_outlined,
-                            color: AppColors.textSecondary,
-                            size: 20,
+                        GestureDetector(
+                          onTap: () => Navigator.pushNamed(
+                              context, AppRoutes.notifications),
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: const Icon(
+                              Icons.notifications_outlined,
+                              color: AppColors.textSecondary,
+                              size: 20,
+                            ),
                           ),
                         ),
                         Positioned(
@@ -265,36 +271,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   JobListingCard(
-                    title: 'Install ceiling fan',
-                    category: 'Electrical',
-                    categoryIcon: '⚡',
-                    budget: 'Rs. 2,000',
-                    location: 'Nugegoda, Colombo',
-                    distance: 1.2,
-                    postedAt: '10 min ago',
-                    onTap: () {},
+                    title: kSampleJobs[1].title,
+                    category: kSampleJobs[1].category,
+                    categoryIcon: kSampleJobs[1].categoryIcon,
+                    budget: kSampleJobs[1].budget,
+                    location: kSampleJobs[1].address,
+                    distance: kSampleJobs[1].distanceKm,
+                    postedAt: kSampleJobs[1].postedAt,
+                    onTap: () => Navigator.pushNamed(
+                      context,
+                      AppRoutes.jobDetail,
+                      arguments: kSampleJobs[1],
+                    ),
                   ),
                   const SizedBox(height: 12),
                   JobListingCard(
-                    title: 'House deep cleaning',
-                    category: 'Cleaning',
-                    categoryIcon: '🧹',
-                    budget: 'Rs. 4,500',
-                    location: 'Maharagama, Colombo',
-                    distance: 2.8,
-                    postedAt: '25 min ago',
-                    onTap: () {},
+                    title: kSampleJobs[2].title,
+                    category: kSampleJobs[2].category,
+                    categoryIcon: kSampleJobs[2].categoryIcon,
+                    budget: kSampleJobs[2].budget,
+                    location: kSampleJobs[2].address,
+                    distance: kSampleJobs[2].distanceKm,
+                    postedAt: kSampleJobs[2].postedAt,
+                    onTap: () => Navigator.pushNamed(
+                      context,
+                      AppRoutes.jobDetail,
+                      arguments: kSampleJobs[2],
+                    ),
                   ),
                   const SizedBox(height: 12),
                   JobListingCard(
-                    title: 'Garden trimming & weeding',
-                    category: 'Gardening',
-                    categoryIcon: '🌿',
-                    budget: 'Rs. 1,800',
-                    location: 'Kottawa, Colombo',
-                    distance: 4.1,
-                    postedAt: '1 hr ago',
-                    onTap: () {},
+                    title: kSampleJobs[0].title,
+                    category: kSampleJobs[0].category,
+                    categoryIcon: kSampleJobs[0].categoryIcon,
+                    budget: kSampleJobs[0].budget,
+                    location: kSampleJobs[0].address,
+                    distance: kSampleJobs[0].distanceKm,
+                    postedAt: kSampleJobs[0].postedAt,
+                    onTap: () => Navigator.pushNamed(
+                      context,
+                      AppRoutes.jobDetail,
+                      arguments: kSampleJobs[0],
+                    ),
                   ),
                   const SizedBox(height: 32),
                 ]),
