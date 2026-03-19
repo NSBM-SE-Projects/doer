@@ -386,18 +386,59 @@ class _ReviewCard extends StatelessWidget {
 // ──────────────────────────────────────────────────────────────
 // BROWSE WORKERS SCREEN
 // List of workers with search bar and filter chips.
-// Filters: Nearest, Top Rated, Gold+, Available Now
+// All worker cards navigate to WorkerProfileScreen.
+// Filter chips filter the list by category.
 // ──────────────────────────────────────────────────────────────
-class BrowseWorkersScreen extends StatelessWidget {
+class BrowseWorkersScreen extends StatefulWidget {
   final String? categoryFilter;
   const BrowseWorkersScreen({super.key, this.categoryFilter});
 
   @override
+  State<BrowseWorkersScreen> createState() => _BrowseWorkersScreenState();
+}
+
+class _BrowseWorkersScreenState extends State<BrowseWorkersScreen> {
+  String _selectedFilter = 'Nearest';
+
+  // Mock worker data — will be replaced by API data later
+  final List<Map<String, dynamic>> _allWorkers = [
+    {'name': 'Nimal Perera', 'skill': 'Electrician', 'badge': 'gold', 'rating': 4.8, 'distance': 2.1},
+    {'name': 'Saman Fernando', 'skill': 'Plumber', 'badge': 'silver', 'rating': 4.5, 'distance': 3.4},
+    {'name': 'Kumari Silva', 'skill': 'House Cleaning', 'badge': 'platinum', 'rating': 4.9, 'distance': 1.8},
+    {'name': 'Ruwan Jayasinghe', 'skill': 'Painter', 'badge': 'bronze', 'rating': 4.2, 'distance': 5.1},
+    {'name': 'Kasun Bandara', 'skill': 'Electrician', 'badge': 'gold', 'rating': 4.7, 'distance': 4.2},
+    {'name': 'Priya Rajapaksa', 'skill': 'Gardener', 'badge': 'silver', 'rating': 4.3, 'distance': 3.8},
+  ];
+
+  List<Map<String, dynamic>> get _filteredWorkers {
+    var workers = List<Map<String, dynamic>>.from(_allWorkers);
+
+    switch (_selectedFilter) {
+      case 'Nearest':
+        workers.sort((a, b) => (a['distance'] as double).compareTo(b['distance'] as double));
+        break;
+      case 'Top Rated':
+        workers.sort((a, b) => (b['rating'] as double).compareTo(a['rating'] as double));
+        break;
+      case 'Gold+':
+        workers = workers.where((w) => w['badge'] == 'gold' || w['badge'] == 'platinum').toList();
+        break;
+      case 'Available Now':
+        // For now show all — will filter by real availability from API later
+        break;
+    }
+
+    return workers;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final workers = _filteredWorkers;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(categoryFilter ?? 'Browse Workers'),
+        title: Text(widget.categoryFilter ?? 'Browse Workers'),
       ),
       body: Column(
         children: [
@@ -416,95 +457,72 @@ class BrowseWorkersScreen extends StatelessWidget {
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              children: [
-                _FilterChip(label: 'Nearest', selected: true),
-                const SizedBox(width: 8),
-                _FilterChip(label: 'Top Rated'),
-                const SizedBox(width: 8),
-                _FilterChip(label: 'Gold+'),
-                const SizedBox(width: 8),
-                _FilterChip(label: 'Available Now'),
-              ],
+              children: ['Nearest', 'Top Rated', 'Gold+', 'Available Now']
+                  .map((filter) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: GestureDetector(
+                          onTap: () => setState(() => _selectedFilter = filter),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: _selectedFilter == filter
+                                  ? AppColors.primary
+                                  : AppColors.surface,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: _selectedFilter == filter
+                                    ? AppColors.primary
+                                    : AppColors.border,
+                              ),
+                            ),
+                            child: Text(
+                              filter,
+                              style: AppTypography.labelMedium.copyWith(
+                                color: _selectedFilter == filter
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ))
+                  .toList(),
             ),
           ),
           const SizedBox(height: 12),
-          // Worker list
+          // Worker list — every card navigates to profile
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              children: [
-                WorkerCard(
-                  name: 'Nimal Perera',
-                  skill: 'Electrician',
-                  badge: BadgeLevel.gold,
-                  rating: 4.8,
-                  distance: 2.1,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const WorkerProfileScreen()),
-                    );
-                  },
-                ),
-                const SizedBox(height: 12),
-                WorkerCard(
-                  name: 'Saman Fernando',
-                  skill: 'Plumber',
-                  badge: BadgeLevel.silver,
-                  rating: 4.5,
-                  distance: 3.4,
-                  onTap: () {},
-                ),
-                const SizedBox(height: 12),
-                WorkerCard(
-                  name: 'Kumari Silva',
-                  skill: 'House Cleaning',
-                  badge: BadgeLevel.platinum,
-                  rating: 4.9,
-                  distance: 1.8,
-                  onTap: () {},
-                ),
-                const SizedBox(height: 12),
-                WorkerCard(
-                  name: 'Ruwan Jayasinghe',
-                  skill: 'Painter',
-                  badge: BadgeLevel.bronze,
-                  rating: 4.2,
-                  distance: 5.1,
-                  onTap: () {},
-                ),
-              ],
-            ),
+            child: workers.isEmpty
+                ? const EmptyState(
+                    icon: '🔍',
+                    title: 'No workers found',
+                    subtitle: 'Try a different filter.',
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    itemCount: workers.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final w = workers[index];
+                      return WorkerCard(
+                        name: w['name'],
+                        skill: w['skill'],
+                        badge: w['badge'],
+                        rating: w['rating'],
+                        distance: w['distance'],
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const WorkerProfileScreen()),
+                          );
+                        },
+                      );
+                    },
+                  ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// Filter chip widget
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  const _FilterChip({required this.label, this.selected = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: selected ? AppColors.primary : AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: selected ? AppColors.primary : AppColors.border,
-        ),
-      ),
-      child: Text(
-        label,
-        style: AppTypography.labelMedium.copyWith(
-          color: selected ? Colors.white : AppColors.textSecondary,
-        ),
       ),
     );
   }
