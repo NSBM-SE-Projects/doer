@@ -35,7 +35,7 @@ class WorkerProfileScreen extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: AppColors.surface.withOpacity(0.9),
+                  color: AppColors.surface.withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.arrow_back_rounded, size: 20),
@@ -104,10 +104,10 @@ class WorkerProfileScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.badgeGold.withOpacity(0.08),
+                      color: AppColors.badgeGold.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                          color: AppColors.badgeGold.withOpacity(0.2)),
+                          color: AppColors.badgeGold.withValues(alpha: 0.2)),
                     ),
                     child: Row(
                       children: [
@@ -230,7 +230,7 @@ class WorkerProfileScreen extends StatelessWidget {
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       itemCount: 5,
-                      separatorBuilder: (_, __) =>
+                      separatorBuilder: (_, _) =>
                           const SizedBox(width: 10),
                       itemBuilder: (_, i) => Container(
                         width: 120,
@@ -241,7 +241,7 @@ class WorkerProfileScreen extends StatelessWidget {
                         child: Center(
                           child: Icon(Icons.image_outlined,
                               color:
-                                  AppColors.textTertiary.withOpacity(0.4),
+                                  AppColors.textTertiary.withValues(alpha: 0.4),
                               size: 32),
                         ),
                       ),
