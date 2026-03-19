@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/services/auth_service.dart';
 
 // ──────────────────────────────────────────────────────────────
-// SPLASH SCREEN
-// First screen shown when app opens. Shows animated Doer logo
-// for 2 seconds, then navigates to onboarding (or home if logged in).
-// Uses AnimationController for smooth fade + scale effect.
+// SPLASH SCREEN (with Firebase Auth check)
+// Shows logo for 2 seconds, then:
+//   - If user is logged in → go to home
+//   - If not → go to onboarding
 // ──────────────────────────────────────────────────────────────
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -16,12 +17,10 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
-  // Animation controller drives the animation over 1.2 seconds
   late AnimationController _controller;
-  // Fade from invisible (0) to visible (1)
   late Animation<double> _fadeIn;
-  // Scale from 80% to 100% size (with a slight bounce via easeOutBack)
   late Animation<double> _scale;
+  final _authService = AuthService();
 
   @override
   void initState() {
@@ -36,16 +35,18 @@ class _SplashScreenState extends State<SplashScreen>
     _scale = Tween(begin: 0.8, end: 1.0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
     );
-    // Start the animation immediately
     _controller.forward();
 
-    // After 2 seconds, navigate away
+    // After 2 seconds, check auth state and navigate
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
-        // TODO: Check if user is logged in
-        // If yes → navigate to home
-        // If no → navigate to onboarding
-        Navigator.pushReplacementNamed(context, '/onboarding');
+        if (_authService.currentUser != null) {
+          // User is logged in → go to home
+          Navigator.pushReplacementNamed(context, '/');
+        } else {
+          // Not logged in → go to onboarding
+          Navigator.pushReplacementNamed(context, '/onboarding');
+        }
       }
     });
   }
@@ -61,16 +62,13 @@ class _SplashScreenState extends State<SplashScreen>
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Center(
-        // FadeTransition makes the child fade in
         child: FadeTransition(
           opacity: _fadeIn,
-          // ScaleTransition makes the child grow from 80% to 100%
           child: ScaleTransition(
             scale: _scale,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // App icon - gold rounded square with tool icon
                 Container(
                   width: 80,
                   height: 80,
@@ -85,7 +83,6 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
                 const SizedBox(height: 20),
-                // App name in serif font
                 Text(
                   'Doer',
                   style: AppTypography.displayLarge.copyWith(
@@ -94,7 +91,6 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
                 const SizedBox(height: 4),
-                // Tagline
                 Text(
                   'Home services, done right.',
                   style: AppTypography.bodySmall.copyWith(
