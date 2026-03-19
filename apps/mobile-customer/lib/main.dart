@@ -1,18 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
 
 // ──────────────────────────────────────────────────────────────
 // MAIN ENTRY POINT
-// This is where the app starts. It:
-//   1. Sets status bar to dark icons (for light background)
-//   2. Applies our warm gold theme
-//   3. Sets splash screen as the first route
-//   4. Uses our custom route generator for all navigation
+// Now with Firebase initialization.
+// Firebase.initializeApp() MUST run before the app starts
+// so auth, messaging, etc. are ready to use.
 // ──────────────────────────────────────────────────────────────
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase before anything else
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -20,6 +26,7 @@ void main() {
       systemNavigationBarColor: AppColors.surface,
     ),
   );
+
   runApp(const DoerCustomerApp());
 }
 
