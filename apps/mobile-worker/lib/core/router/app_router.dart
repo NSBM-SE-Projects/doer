@@ -8,6 +8,8 @@ import '../../features/auth/screens/otp_screen.dart';
 import '../../features/auth/screens/forgot_password_screen.dart';
 import '../../features/verification/screens/verification_screens.dart';
 import '../../features/earnings/screens/earnings_screen.dart';
+import '../../features/jobs/screens/job_detail_screen.dart';
+import '../../features/notifications/screens/notifications_screen.dart';
 
 // ──────────────────────────────────────────────────────────────
 // APP ROUTER
@@ -25,6 +27,8 @@ class AppRoutes {
   static const String verification = '/verification';
   static const String earnings = '/earnings';
   static const String settings = '/settings';
+  static const String jobDetail = '/job-detail';
+  static const String notifications = '/notifications';
 }
 
 Route<dynamic> generateRoute(RouteSettings settings) {
@@ -48,6 +52,11 @@ Route<dynamic> generateRoute(RouteSettings settings) {
       return _buildRoute(const VerificationScreen());
     case AppRoutes.earnings:
       return _buildRoute(const EarningsScreen());
+    case AppRoutes.notifications:
+      return _buildRoute(const NotificationsScreen());
+    case AppRoutes.jobDetail:
+      final job = settings.arguments as JobDetailData;
+      return _buildRoute(JobDetailScreen(job: job));
     default:
       return _buildRoute(const MainShell());
   }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/router/app_router.dart';
+import 'job_detail_screen.dart';
 
 // ──────────────────────────────────────────────────────────────
 // BROWSE JOBS SCREEN
@@ -182,6 +184,25 @@ class _BrowseJobsScreenState extends State<BrowseJobsScreen> {
                       separatorBuilder: (_, __) => const SizedBox(height: 12),
                       itemBuilder: (context, index) {
                         final job = _filteredJobs[index];
+                        // map mock job to detail data (use sample if id matches, else build inline)
+                        final detail = index < kSampleJobs.length
+                            ? kSampleJobs[index]
+                            : JobDetailData(
+                                id: '$index',
+                                title: job.title,
+                                category: job.category,
+                                categoryIcon: job.icon,
+                                budget: job.budget,
+                                distanceKm: job.distance,
+                                postedAt: job.postedAt,
+                                clientName: 'Client',
+                                clientRating: 4.5,
+                                clientJobsPosted: 1,
+                                description:
+                                    'Job details will be shown here.',
+                                scheduledDate: 'To be confirmed',
+                                address: job.location,
+                              );
                         return JobListingCard(
                           title: job.title,
                           category: job.category,
@@ -190,9 +211,11 @@ class _BrowseJobsScreenState extends State<BrowseJobsScreen> {
                           location: job.location,
                           distance: job.distance,
                           postedAt: job.postedAt,
-                          onTap: () {
-                            // TODO: Navigate to job detail
-                          },
+                          onTap: () => Navigator.pushNamed(
+                            context,
+                            AppRoutes.jobDetail,
+                            arguments: detail,
+                          ),
                         );
                       },
                     ),
