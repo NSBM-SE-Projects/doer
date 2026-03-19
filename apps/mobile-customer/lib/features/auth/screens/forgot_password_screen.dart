@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/auth_service.dart';
 
 // ──────────────────────────────────────────────────────────────
-// FORGOT PASSWORD SCREEN
-// Two states:
-//   1. Form state: user enters email, clicks "Send Reset Link"
-//   2. Success state: shows confirmation with "Open Email App" button
-// Uses setState to toggle between the two states without navigating.
+// FORGOT PASSWORD (connected to Firebase Auth)
 // ──────────────────────────────────────────────────────────────
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -18,13 +15,46 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
+  final _authService = AuthService();
   bool _isLoading = false;
-  bool _sent = false; // toggles between form and success state
+  bool _sent = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
     _emailController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleReset() async {
+    if (_emailController.text.trim().isEmpty) {
+      setState(() => _errorMessage = 'Please enter your email');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await _authService.resetPassword(
+        email: _emailController.text.trim(),
+      );
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _sent = true;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -39,19 +69,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
-        // Show form or success based on _sent flag
         child: _sent ? _buildSuccessState() : _buildFormState(),
       ),
     );
   }
 
-  // ── State 1: Email input form ──
   Widget _buildFormState() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 8),
-        // Lock icon
         Container(
           width: 52,
           height: 52,
@@ -72,7 +99,33 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             height: 1.6,
           ),
         ),
-        const SizedBox(height: 32),
+
+        const SizedBox(height: 24),
+
+        if (_errorMessage != null) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.errorLight,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline_rounded,
+                    color: AppColors.error, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(_errorMessage!,
+                      style: AppTypography.bodySmall
+                          .copyWith(color: AppColors.error)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+
         Text('Email Address', style: AppTypography.labelMedium),
         const SizedBox(height: 8),
         TextField(
@@ -89,18 +142,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         DoerButton(
           label: 'Send Reset Link',
           isLoading: _isLoading,
-          onPressed: () {
-            setState(() => _isLoading = true);
-            // Simulate API call (2 seconds)
-            Future.delayed(const Duration(seconds: 2), () {
-              if (mounted) {
-                setState(() {
-                  _isLoading = false;
-                  _sent = true; // switch to success state
-                });
-              }
-            });
-          },
+          onPressed: _handleReset,
         ),
         const SizedBox(height: 20),
         Center(
@@ -118,12 +160,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 
-  // ── State 2: Success confirmation ──
   Widget _buildSuccessState() {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // Green checkmark icon
         Container(
           width: 80,
           height: 80,
@@ -147,17 +187,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         ),
         const SizedBox(height: 32),
         DoerButton(
-          label: 'Open Email App',
-          onPressed: () {
-            // TODO: Open email app using url_launcher
-          },
+          label: 'Back to Sign In',
+          onPressed: () => Navigator.pop(context),
         ),
         const SizedBox(height: 16),
-        // Resend link
         GestureDetector(
-          onTap: () {
-            setState(() => _sent = false); // go back to form
-          },
+          onTap: () => setState(() => _sent = false),
           child: Text(
             'Didn\'t receive it? Resend',
             style: AppTypography.labelMedium.copyWith(

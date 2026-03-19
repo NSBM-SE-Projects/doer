@@ -2,15 +2,10 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/auth_service.dart';
 
 // ──────────────────────────────────────────────────────────────
-// REGISTER SCREEN
-// New customer account creation. Collects:
-// - Full name, email, phone (+94 format)
-// - Language preference (English/Sinhala/Tamil) — from FR-5
-// - Password with confirmation
-// - Terms & Privacy agreement
-// After registration → navigates to OTP verification
+// REGISTER SCREEN (connected to Firebase Auth)
 // ──────────────────────────────────────────────────────────────
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -25,10 +20,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _authService = AuthService();
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   bool _agreeTerms = false;
   bool _isLoading = false;
+  String? _errorMessage;
   String _selectedLanguage = 'English';
 
   @override
@@ -39,6 +36,50 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleRegister() async {
+    // Validation
+    if (_nameController.text.trim().isEmpty) {
+      setState(() => _errorMessage = 'Please enter your name');
+      return;
+    }
+    if (_emailController.text.trim().isEmpty) {
+      setState(() => _errorMessage = 'Please enter your email');
+      return;
+    }
+    if (_passwordController.text.length < 8) {
+      setState(() => _errorMessage = 'Password must be at least 8 characters');
+      return;
+    }
+    if (_passwordController.text != _confirmPasswordController.text) {
+      setState(() => _errorMessage = 'Passwords do not match');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await _authService.signUp(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        name: _nameController.text.trim(),
+      );
+      if (mounted) {
+        // Success → go to home
+        Navigator.pushReplacementNamed(context, '/');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -66,9 +107,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             ),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
 
-            // Full Name
+            // Error banner
+            if (_errorMessage != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.errorLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded,
+                        color: AppColors.error, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _errorMessage!,
+                        style: AppTypography.bodySmall
+                            .copyWith(color: AppColors.error),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
             _buildLabel('Full Name'),
             TextField(
               controller: _nameController,
@@ -83,7 +150,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
             const SizedBox(height: 20),
 
-            // Email
             _buildLabel('Email'),
             TextField(
               controller: _emailController,
@@ -98,7 +164,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
             const SizedBox(height: 20),
 
-            // Phone - Sri Lankan format
             _buildLabel('Phone Number'),
             TextField(
               controller: _phoneController,
@@ -113,7 +178,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
             const SizedBox(height: 20),
 
-            // Language - trilingual support (Sinhala, Tamil, English)
             _buildLabel('Preferred Language'),
             Container(
               decoration: BoxDecoration(
@@ -142,7 +206,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
             const SizedBox(height: 20),
 
-            // Password
             _buildLabel('Password'),
             TextField(
               controller: _passwordController,
@@ -168,7 +231,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
             const SizedBox(height: 20),
 
-            // Confirm Password
             _buildLabel('Confirm Password'),
             TextField(
               controller: _confirmPasswordController,
@@ -194,7 +256,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
             const SizedBox(height: 24),
 
-            // Terms & Privacy checkbox
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -241,23 +302,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
             const SizedBox(height: 28),
 
-            // Create Account button (disabled until terms agreed)
             DoerButton(
               label: 'Create Account',
               isLoading: _isLoading,
-              onPressed: _agreeTerms
-                  ? () {
-                      setState(() => _isLoading = true);
-                      // TODO: Call Firebase Auth register
-                      // On success → navigate to OTP screen
-                      // Navigator.pushNamed(context, '/otp', arguments: _emailController.text);
-                    }
-                  : null,
+              onPressed: _agreeTerms ? _handleRegister : null,
             ),
 
             const SizedBox(height: 20),
 
-            // Back to login link
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -283,7 +335,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // Helper to build consistent field labels
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
