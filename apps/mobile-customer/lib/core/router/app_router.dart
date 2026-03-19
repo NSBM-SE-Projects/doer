@@ -12,7 +12,8 @@ import '../../features/workers/screens/worker_screens.dart';
 import '../../features/payments/screens/payment_screens.dart';
 import '../../features/reviews/screens/review_notification_screens.dart';
 import '../../features/profile/screens/profile_screens.dart';
-
+import '../../features/jobs/screens/my_jobs_screen.dart';
+import '../../features/messaging/screens/messaging_screens.dart';
 // ──────────────────────────────────────────────────────────────
 // APP ROUTER
 // Central place for all route names and navigation logic.
@@ -42,7 +43,10 @@ class AppRoutes {
 // Route generator — MaterialApp calls this for every Navigator.pushNamed()
 Route<dynamic> generateRoute(RouteSettings settings) {
   switch (settings.name) {
-    case AppRoutes.splash:
+    case '/job-detail':
+      return _buildRoute(const JobDetailScreen());
+    case '/chat':
+      return _buildRoute(const ChatScreen());case AppRoutes.splash:
       return _buildRoute(const SplashScreen());
     case AppRoutes.onboarding:
       return _buildRoute(const OnboardingScreen());
