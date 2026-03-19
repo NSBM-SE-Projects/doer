@@ -258,7 +258,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.location_on_rounded,
@@ -460,7 +460,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
                   width: 52,
                   height: 52,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: const Icon(Icons.camera_alt_outlined,
@@ -623,7 +623,7 @@ class _UrgencyChip extends StatelessWidget {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: selected ? c.withOpacity(0.1) : AppColors.surface,
+            color: selected ? c.withValues(alpha: 0.1) : AppColors.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: selected ? c : AppColors.border,

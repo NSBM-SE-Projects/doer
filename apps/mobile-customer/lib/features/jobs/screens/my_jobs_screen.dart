@@ -248,7 +248,7 @@ class JobDetailScreen extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: AppColors.badgeSilver.withOpacity(0.15),
+                                color: AppColors.badgeSilver.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text('Silver',
@@ -444,7 +444,7 @@ class _TimelineItem extends StatelessWidget {
                     color: isCompleted
                         ? AppColors.primary
                         : isActive
-                            ? AppColors.primary.withOpacity(0.2)
+                            ? AppColors.primary.withValues(alpha: 0.2)
                             : AppColors.border,
                     border: isActive
                         ? Border.all(color: AppColors.primary, width: 2)
@@ -537,7 +537,7 @@ class _ActionIcon extends StatelessWidget {
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, size: 18, color: color),
