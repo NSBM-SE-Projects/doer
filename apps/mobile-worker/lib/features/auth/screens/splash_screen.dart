@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/services/auth_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // SPLASH SCREEN
@@ -18,6 +19,7 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _controller;
   late Animation<double> _fadeIn;
   late Animation<double> _scale;
+  final _authService = AuthService();
 
   @override
   void initState() {
@@ -36,10 +38,13 @@ class _SplashScreenState extends State<SplashScreen>
 
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
-        // TODO: Check if worker is logged in
-        // If yes → navigate to home (MainShell)
-        // If no → navigate to onboarding
-        Navigator.pushReplacementNamed(context, '/onboarding');
+        if (_authService.currentUser != null) {
+          // Already logged in → go straight to home
+          Navigator.pushReplacementNamed(context, '/');
+        } else {
+          // Not logged in → show onboarding
+          Navigator.pushReplacementNamed(context, '/onboarding');
+        }
       }
     });
   }

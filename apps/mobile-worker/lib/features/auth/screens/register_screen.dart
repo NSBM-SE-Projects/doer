@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/auth_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // REGISTER SCREEN (Worker)
@@ -30,10 +31,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
+  final _authService = AuthService();
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   bool _agreeTerms = false;
   bool _isLoading = false;
+  String? _errorMessage;
 
   String _selectedLanguage = 'English';
   String _selectedSkill = 'Plumbing';
@@ -56,6 +59,53 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleRegister() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    final confirm = _confirmPasswordController.text;
+
+    if (name.isEmpty) {
+      setState(() => _errorMessage = 'Please enter your full name');
+      return;
+    }
+    if (email.isEmpty) {
+      setState(() => _errorMessage = 'Please enter your email');
+      return;
+    }
+    if (password.length < 6) {
+      setState(() => _errorMessage = 'Password must be at least 6 characters');
+      return;
+    }
+    if (password != confirm) {
+      setState(() => _errorMessage = 'Passwords do not match');
+      return;
+    }
+    if (!_agreeTerms) {
+      setState(() => _errorMessage = 'Please agree to the Terms of Service and Privacy Policy');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await _authService.signUp(email: email, password: password, name: name);
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -84,6 +134,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
 
             const SizedBox(height: 32),
+
+            // Error banner
+            if (_errorMessage != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.errorLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded,
+                        color: AppColors.error, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _errorMessage!,
+                        style: AppTypography.bodySmall
+                            .copyWith(color: AppColors.error),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // Full Name
             _buildLabel('Full Name'),
@@ -285,14 +362,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             DoerButton(
               label: 'Create Account',
               isLoading: _isLoading,
-              onPressed: _agreeTerms
-                  ? () {
-                      setState(() => _isLoading = true);
-                      // TODO: Call Firebase Auth register
-                      // On success → navigate to OTP screen
-                      // Navigator.pushNamed(context, '/otp', arguments: _emailController.text);
-                    }
-                  : null,
+              onPressed: _handleRegister,
             ),
 
             const SizedBox(height: 20),

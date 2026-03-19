@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/auth_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // LOGIN SCREEN (Worker)
@@ -18,14 +19,47 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authService = AuthService();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleLogin() async {
+    if (_emailController.text.trim().isEmpty) {
+      setState(() => _errorMessage = 'Please enter your email');
+      return;
+    }
+    if (_passwordController.text.isEmpty) {
+      setState(() => _errorMessage = 'Please enter your password');
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      await _authService.signIn(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -67,6 +101,33 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
 
               const SizedBox(height: 36),
+
+              // Error banner
+              if (_errorMessage != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.errorLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline_rounded,
+                          color: AppColors.error, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: AppTypography.bodySmall
+                              .copyWith(color: AppColors.error),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
 
               // Email / Phone
               Text('Email or Phone', style: AppTypography.labelMedium),
@@ -131,11 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
               DoerButton(
                 label: 'Sign In',
                 isLoading: _isLoading,
-                onPressed: () {
-                  setState(() => _isLoading = true);
-                  // TODO: Call Firebase Auth sign in
-                  // On success → Navigator.pushReplacementNamed(context, '/');
-                },
+                onPressed: _handleLogin,
               ),
 
               const SizedBox(height: 20),

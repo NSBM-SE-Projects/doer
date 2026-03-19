@@ -2,14 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
+import 'core/services/auth_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // MAIN ENTRY POINT (Worker App)
-// Starts at SplashScreen, uses onGenerateRoute for navigation.
-// Same warm gold theme as the customer app for brand consistency.
+// Restores auth session before runApp so SplashScreen can check
+// currentUser synchronously.
 // ──────────────────────────────────────────────────────────────
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Restore saved login session (fills AuthService singleton)
+  await AuthService().init();
+
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
