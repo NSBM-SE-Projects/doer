@@ -1,10 +1,14 @@
 import { Router } from 'express';
+import authRoutes from './auth';
+import categoryRoutes from './categories';
+import userRoutes from './users';
+import jobRoutes from './jobs';
 
 const router = Router();
 
-// Routes will be added here as features are built
-// e.g. router.use('/auth', authRoutes);
-// e.g. router.use('/users', userRoutes);
-// e.g. router.use('/jobs', jobRoutes);
+router.use('/auth', authRoutes);
+router.use('/categories', categoryRoutes);
+router.use('/users', userRoutes);
+router.use('/jobs', jobRoutes);
 
 export default router;
