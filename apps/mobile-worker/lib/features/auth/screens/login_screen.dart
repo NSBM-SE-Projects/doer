@@ -49,7 +49,9 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-      if (mounted) Navigator.pushReplacementNamed(context, '/');
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+      }
     } catch (e) {
       if (mounted) {
         setState(() {

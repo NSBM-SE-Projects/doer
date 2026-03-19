@@ -83,6 +83,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       setState(() => _errorMessage = 'Passwords do not match');
       return;
     }
+    if (!_agreeTerms) {
+      setState(() => _errorMessage = 'Please agree to the Terms of Service and Privacy Policy');
+      return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -91,7 +95,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     try {
       await _authService.signUp(email: email, password: password, name: name);
-      if (mounted) Navigator.pushReplacementNamed(context, '/');
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -356,7 +362,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             DoerButton(
               label: 'Create Account',
               isLoading: _isLoading,
-              onPressed: _agreeTerms ? _handleRegister : null,
+              onPressed: _handleRegister,
             ),
 
             const SizedBox(height: 20),
