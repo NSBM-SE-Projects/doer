@@ -5,6 +5,18 @@ import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
 
+/// Removes the stretching/glow overscroll effect on all scrollables.
+class NoStretchScrollBehavior extends ScrollBehavior {
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+}
+
 // ──────────────────────────────────────────────────────────────
 // MAIN ENTRY POINT (Worker App)
 // Initializes Firebase before runApp, then starts at SplashScreen.
@@ -34,6 +46,7 @@ class DoerWorkerApp extends StatelessWidget {
     return MaterialApp(
       title: 'Doer Worker',
       debugShowCheckedModeBanner: false,
+      scrollBehavior: NoStretchScrollBehavior(),
       theme: AppTheme.light,
       initialRoute: AppRoutes.splash,
       onGenerateRoute: generateRoute,
