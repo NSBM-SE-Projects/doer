@@ -23,7 +23,16 @@ export const verifyFirebaseToken = async (
     console.warn('Firebase not configured — skipping token verification');
     return null;
   }
-  return admin.auth().verifyIdToken(idToken);
+  try {
+    return await admin.auth().verifyIdToken(idToken);
+  } catch {
+    // In development, allow fallback to dev UID if Firebase token is invalid
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('Firebase token verification failed — using dev fallback');
+      return null;
+    }
+    throw new Error('Invalid Firebase token');
+  }
 };
 
 export { isFirebaseConfigured };

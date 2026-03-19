@@ -3,18 +3,9 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/router/app_router.dart';
-import '../../jobs/screens/job_detail_screen.dart';
+import '../../../core/services/api_service.dart';
+import '../../../core/services/auth_service.dart';
 
-// ──────────────────────────────────────────────────────────────
-// DASHBOARD SCREEN
-// Worker's main home tab. Shows:
-//   - Greeting + badge level
-//   - Availability toggle (online/offline)
-//   - Earnings summary card
-//   - Nearby jobs (quick preview)
-//   - Active job (if any)
-//   - Verification status nudge
-// ──────────────────────────────────────────────────────────────
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -24,303 +15,335 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   bool _isAvailable = true;
+  bool _isLoading = true;
+  String _workerName = '';
+  String _verificationStatus = 'PENDING';
+  double _rating = 0;
+  int _totalJobs = 0;
+  List<dynamic> _availableJobs = [];
+  List<dynamic> _activeJobs = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final results = await Future.wait([
+        ApiService().getMe(),
+        ApiService().getAvailableJobs(),
+        ApiService().getMyJobs(),
+      ]);
+
+      final userData = results[0] as Map<String, dynamic>;
+      final user = userData['user'];
+      final wp = user['workerProfile'];
+
+      setState(() {
+        _workerName = user['name'] ?? AuthService().currentUser?.displayName ?? 'Worker';
+        _isAvailable = wp?['isAvailable'] ?? true;
+        _verificationStatus = wp?['verificationStatus'] ?? 'PENDING';
+        _rating = (wp?['rating'] ?? 0).toDouble();
+        _totalJobs = wp?['totalJobs'] ?? 0;
+        _availableJobs = results[1] as List;
+        final allJobs = (results[2] as Map<String, dynamic>)['jobs'] as List;
+        _activeJobs = allJobs.where((j) =>
+          j['status'] == 'ASSIGNED' || j['status'] == 'IN_PROGRESS'
+        ).toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _workerName = AuthService().currentUser?.displayName ?? 'Worker';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _toggleAvailability(bool value) async {
+    setState(() => _isAvailable = value);
+    try {
+      await ApiService().updateWorkerProfile(isAvailable: value);
+    } catch (_) {
+      setState(() => _isAvailable = !value);
+    }
+  }
+
+  String _getCategoryIcon(String? categoryName) {
+    final cat = AppCategories.all.where((c) =>
+      c.name.toLowerCase() == (categoryName ?? '').toLowerCase()
+    );
+    return cat.isNotEmpty ? cat.first.icon : '🔧';
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            // App Bar
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+        child: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _loadData,
+              child: CustomScrollView(
+                slivers: [
+                  // App Bar
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                      child: Row(
                         children: [
-                          Text(
-                            'Good morning,',
-                            style: AppTypography.bodySmall,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Good morning,', style: AppTypography.bodySmall),
+                                Text(_workerName, style: AppTypography.displaySmall),
+                              ],
+                            ),
                           ),
-                          Text(
-                            'Kasun Perera',
-                            style: AppTypography.displaySmall,
+                          BadgePill(badge: _verificationStatus == 'VERIFIED'
+                              ? BadgeLevel.bronze : BadgeLevel.trainee),
+                          const SizedBox(width: 10),
+                          Stack(
+                            children: [
+                              GestureDetector(
+                                onTap: () => Navigator.pushNamed(context, AppRoutes.notifications),
+                                child: Container(
+                                  width: 40, height: 40,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: AppColors.border),
+                                  ),
+                                  child: const Icon(Icons.notifications_outlined,
+                                      color: AppColors.textSecondary, size: 20),
+                                ),
+                              ),
+                              Positioned(
+                                top: 6, right: 6,
+                                child: Container(
+                                  width: 8, height: 8,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.error, shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
                     ),
-                    // Badge pill
-                    const BadgePill(badge: BadgeLevel.silver),
-                    const SizedBox(width: 10),
-                    // Notification bell
-                    Stack(
-                      children: [
-                        GestureDetector(
-                          onTap: () => Navigator.pushNamed(
-                              context, AppRoutes.notifications),
-                          child: Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: const Icon(
-                              Icons.notifications_outlined,
-                              color: AppColors.textSecondary,
-                              size: 20,
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          top: 6,
-                          right: 6,
-                          child: Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: AppColors.error,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Availability toggle
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: _isAvailable
-                        ? AppColors.successLight
-                        : AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: _isAvailable
-                          ? AppColors.success.withValues(alpha: 0.3)
-                          : AppColors.border,
-                    ),
                   ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
+
+                  // Availability toggle
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
-                          color: _isAvailable
-                              ? AppColors.success
-                              : AppColors.textTertiary,
-                          shape: BoxShape.circle,
+                          color: _isAvailable ? AppColors.successLight : AppColors.surfaceVariant,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: _isAvailable
+                                ? AppColors.success.withValues(alpha: 0.3)
+                                : AppColors.border,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Text(
-                              _isAvailable ? 'You\'re Online' : 'You\'re Offline',
-                              style: AppTypography.headlineSmall.copyWith(
-                                color: _isAvailable
-                                    ? AppColors.success
-                                    : AppColors.textSecondary,
+                            Container(
+                              width: 8, height: 8,
+                              decoration: BoxDecoration(
+                                color: _isAvailable ? AppColors.success : AppColors.textTertiary,
+                                shape: BoxShape.circle,
                               ),
                             ),
-                            Text(
-                              _isAvailable
-                                  ? 'Clients can see you in job matches'
-                                  : 'You\'re hidden from job matches',
-                              style: AppTypography.labelSmall,
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _isAvailable ? 'You\'re Online' : 'You\'re Offline',
+                                    style: AppTypography.headlineSmall.copyWith(
+                                      color: _isAvailable ? AppColors.success : AppColors.textSecondary,
+                                    ),
+                                  ),
+                                  Text(
+                                    _isAvailable
+                                        ? 'Clients can see you in job matches'
+                                        : 'You\'re hidden from job matches',
+                                    style: AppTypography.labelSmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: _isAvailable,
+                              onChanged: _toggleAvailability,
+                              activeColor: AppColors.success,
+                              activeTrackColor: AppColors.success.withValues(alpha: 0.3),
                             ),
                           ],
                         ),
                       ),
-                      Switch(
-                        value: _isAvailable,
-                        onChanged: (v) => setState(() => _isAvailable = v),
-                        activeColor: AppColors.success,
-                        activeTrackColor: AppColors.success.withValues(alpha: 0.3),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            ),
 
-            // Earnings summary
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: const EarningsSummaryCard(
-                  totalEarnings: 'Rs. 48,500',
-                  pendingPayout: 'Rs. 6,200',
-                  thisMonth: 'Rs. 12,800',
-                ),
-              ),
-            ),
-
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-            // Verification nudge (if not fully verified)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.warningLight,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                        color: AppColors.warning.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.verified_user_outlined,
-                          color: AppColors.warning, size: 22),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Complete your verification',
-                              style: AppTypography.headlineSmall.copyWith(
-                                  color: AppColors.warning),
-                            ),
-                            Text(
-                              'Upload NIC to unlock Bronze badge',
-                              style: AppTypography.labelSmall,
-                            ),
-                          ],
-                        ),
+                  // Earnings summary
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: EarningsSummaryCard(
+                        totalEarnings: 'Rs. ${_totalJobs * 3500}',
+                        pendingPayout: 'Rs. 0',
+                        thisMonth: '$_totalJobs jobs done',
                       ),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.pushNamed(context, '/verification');
-                        },
-                        child: Text(
-                          'Go',
-                          style: AppTypography.labelMedium.copyWith(
-                            color: AppColors.warning,
-                            fontWeight: FontWeight.w700,
+                    ),
+                  ),
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+                  // Verification nudge
+                  if (_verificationStatus != 'VERIFIED')
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.warningLight,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.verified_user_outlined, color: AppColors.warning, size: 22),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Complete your verification',
+                                        style: AppTypography.headlineSmall.copyWith(color: AppColors.warning)),
+                                    Text('Upload NIC to unlock Bronze badge',
+                                        style: AppTypography.labelSmall),
+                                  ],
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () => Navigator.pushNamed(context, '/verification'),
+                                child: Text('Go',
+                                    style: AppTypography.labelMedium.copyWith(
+                                        color: AppColors.warning, fontWeight: FontWeight.w700)),
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-            // Active job section
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  children: [
-                    SectionHeader(
-                      title: 'Active Job',
-                      actionText: 'My Jobs',
-                      onAction: () {},
                     ),
-                    ActiveJobCard(
-                      title: 'Fix kitchen plumbing leak',
-                      categoryIcon: '🔧',
-                      status: JobStatus.inProgress,
-                      clientName: 'Nimal Jayawardena',
-                      scheduledDate: 'Today, 2:00 PM',
-                      budget: 'Rs. 3,500',
-                      onTap: () {},
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+                  // Active job section
+                  if (_activeJobs.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Column(
+                          children: [
+                            SectionHeader(title: 'Active Job', actionText: 'My Jobs', onAction: () {}),
+                            ..._activeJobs.map((job) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: ActiveJobCard(
+                                title: job['title'] ?? '',
+                                categoryIcon: _getCategoryIcon(job['category']?['name']),
+                                status: job['status'] == 'IN_PROGRESS'
+                                    ? JobStatus.inProgress : JobStatus.workerAccepted,
+                                clientName: job['customer']?['user']?['name'] ?? 'Customer',
+                                scheduledDate: '',
+                                budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : '',
+                                onTap: () {},
+                              ),
+                            )),
+                          ],
+                        ),
+                      ),
                     ),
-                  ],
-                ),
-              ),
-            ),
 
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                  if (_activeJobs.isNotEmpty)
+                    const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-            // Nearby jobs
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: SectionHeader(
-                  title: 'Nearby Jobs',
-                  actionText: 'Browse all',
-                  onAction: () {},
-                ),
-              ),
-            ),
-
-            // Job listing cards
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  JobListingCard(
-                    title: kSampleJobs[1].title,
-                    category: kSampleJobs[1].category,
-                    categoryIcon: kSampleJobs[1].categoryIcon,
-                    budget: kSampleJobs[1].budget,
-                    location: kSampleJobs[1].address,
-                    distance: kSampleJobs[1].distanceKm,
-                    postedAt: kSampleJobs[1].postedAt,
-                    onTap: () => Navigator.pushNamed(
-                      context,
-                      AppRoutes.jobDetail,
-                      arguments: kSampleJobs[1],
+                  // Nearby jobs
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: SectionHeader(title: 'Nearby Jobs', actionText: 'Browse all', onAction: () {}),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  JobListingCard(
-                    title: kSampleJobs[2].title,
-                    category: kSampleJobs[2].category,
-                    categoryIcon: kSampleJobs[2].categoryIcon,
-                    budget: kSampleJobs[2].budget,
-                    location: kSampleJobs[2].address,
-                    distance: kSampleJobs[2].distanceKm,
-                    postedAt: kSampleJobs[2].postedAt,
-                    onTap: () => Navigator.pushNamed(
-                      context,
-                      AppRoutes.jobDetail,
-                      arguments: kSampleJobs[2],
+
+                  if (_availableJobs.isEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: EmptyState(
+                          icon: '🔍',
+                          title: 'No jobs available',
+                          subtitle: 'Check back soon for new jobs in your area',
+                        ),
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final job = _availableJobs[index];
+                            final catName = job['category']?['name'] ?? '';
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: JobListingCard(
+                                title: job['title'] ?? '',
+                                category: catName,
+                                categoryIcon: _getCategoryIcon(catName),
+                                budget: job['price'] != null
+                                    ? 'Rs. ${job['price'].toStringAsFixed(0)}'
+                                    : 'Negotiable',
+                                location: job['address'] ?? '',
+                                distance: 0,
+                                postedAt: _timeAgo(job['createdAt']),
+                                onTap: () {},
+                              ),
+                            );
+                          },
+                          childCount: _availableJobs.length > 5 ? 5 : _availableJobs.length,
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  JobListingCard(
-                    title: kSampleJobs[0].title,
-                    category: kSampleJobs[0].category,
-                    categoryIcon: kSampleJobs[0].categoryIcon,
-                    budget: kSampleJobs[0].budget,
-                    location: kSampleJobs[0].address,
-                    distance: kSampleJobs[0].distanceKm,
-                    postedAt: kSampleJobs[0].postedAt,
-                    onTap: () => Navigator.pushNamed(
-                      context,
-                      AppRoutes.jobDetail,
-                      arguments: kSampleJobs[0],
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                ]),
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 32)),
+                ],
               ),
             ),
-          ],
-        ),
       ),
     );
+  }
+
+  String _timeAgo(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final dt = DateTime.parse(dateStr);
+      final diff = DateTime.now().difference(dt);
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      return '${diff.inDays}d ago';
+    } catch (_) {
+      return '';
+    }
   }
 }

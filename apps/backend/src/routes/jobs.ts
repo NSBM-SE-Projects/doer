@@ -4,6 +4,7 @@ import prisma from '../config/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/AppError';
+import { createNotification } from './notifications';
 
 const router = Router();
 
@@ -242,6 +243,16 @@ router.patch(
       },
     });
 
+    // Notify customer
+    const customerProfile = await prisma.customerProfile.findUnique({ where: { id: job.customerId } });
+    if (customerProfile) {
+      await createNotification(
+        customerProfile.userId,
+        'Worker Assigned',
+        `${updated.worker?.user.name} accepted your job "${job.title}"`
+      );
+    }
+
     res.json({ job: updated });
   })
 );
@@ -264,6 +275,12 @@ router.patch(
       where: { id: req.params.id as string },
       data: { status: 'IN_PROGRESS' },
     });
+
+    // Notify customer
+    const custProfile = await prisma.customerProfile.findUnique({ where: { id: job.customerId } });
+    if (custProfile) {
+      await createNotification(custProfile.userId, 'Job Started', `Work has begun on "${job.title}"`);
+    }
 
     res.json({ job: updated });
   })
@@ -293,6 +310,12 @@ router.patch(
       where: { id: job.workerId! },
       data: { totalJobs: { increment: 1 } },
     });
+
+    // Notify customer
+    const cp = await prisma.customerProfile.findUnique({ where: { id: job.customerId } });
+    if (cp) {
+      await createNotification(cp.userId, 'Job Completed', `"${job.title}" has been completed. Please leave a review!`);
+    }
 
     res.json({ job: updated });
   })

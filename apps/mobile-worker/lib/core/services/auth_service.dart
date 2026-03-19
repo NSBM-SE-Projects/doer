@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'api_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // WORKER USER
@@ -105,6 +106,19 @@ class AuthService {
       _currentUser = WorkerUser(
           uid: uid, email: email, displayName: name, idToken: idToken);
       await _saveSession(uid, email, name, idToken, refreshToken);
+
+      // Register with backend
+      try {
+        await ApiService().register(
+          firebaseToken: idToken,
+          firebaseUid: uid,
+          email: email,
+          name: name,
+        );
+      } catch (_) {
+        // Backend registration can fail if user already exists — that's OK
+      }
+
       return _currentUser;
     } on DioException catch (e) {
       throw _mapError(e);
@@ -134,6 +148,17 @@ class AuthService {
       _currentUser = WorkerUser(
           uid: uid, email: email, displayName: displayName, idToken: idToken);
       await _saveSession(uid, email, displayName, idToken, refreshToken);
+
+      // Login with backend to get JWT
+      try {
+        await ApiService().login(
+          firebaseToken: idToken,
+          firebaseUid: uid,
+        );
+      } catch (_) {
+        // If backend login fails, user can still use the app with limited features
+      }
+
       return _currentUser;
     } on DioException catch (e) {
       throw _mapError(e);
@@ -143,6 +168,7 @@ class AuthService {
   // ── Sign Out ──
   Future<void> signOut() async {
     _currentUser = null;
+    await ApiService().logout();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('w_uid');
     await prefs.remove('w_email');
