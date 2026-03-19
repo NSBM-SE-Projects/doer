@@ -152,7 +152,7 @@ class HomeScreen extends StatelessWidget {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   itemCount: AppCategories.all.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 14),
+                  separatorBuilder: (_, _) => const SizedBox(width: 14),
                   itemBuilder: (context, index) {
                     final cat = AppCategories.all[index];
                     return CategoryChip(
@@ -187,7 +187,7 @@ class HomeScreen extends StatelessWidget {
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: const Icon(Icons.work_outline_rounded,
@@ -208,7 +208,7 @@ class HomeScreen extends StatelessWidget {
                               Text(
                                 'Track progress and chat with workers',
                                 style: AppTypography.bodySmall.copyWith(
-                                  color: Colors.white.withOpacity(0.8),
+                                  color: Colors.white.withValues(alpha: 0.8),
                                 ),
                               ),
                             ],

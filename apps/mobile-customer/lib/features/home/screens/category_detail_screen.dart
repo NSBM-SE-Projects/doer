@@ -35,7 +35,7 @@ class CategoryDetailScreen extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: AppColors.surface.withOpacity(0.9),
+                  color: AppColors.surface.withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.arrow_back_rounded, size: 20),
@@ -82,10 +82,10 @@ class CategoryDetailScreen extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.06),
+                        color: AppColors.primary.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                            color: AppColors.primary.withOpacity(0.15)),
+                            color: AppColors.primary.withValues(alpha: 0.15)),
                       ),
                       child: Row(
                         children: [

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/widgets/common_widgets.dart';
 
 // ──────────────────────────────────────────────────────────────
 // PROFILE SCREEN
@@ -296,14 +295,14 @@ class SettingsScreen extends StatelessWidget {
               subtitle: 'Use fingerprint or face to sign in',
               trailing: Switch(
                   value: true, onChanged: (v) {},
-                  activeColor: AppColors.primary)),
+                  activeThumbColor: AppColors.primary)),
           _SettingsTile(
               icon: Icons.location_on_outlined,
               title: 'Location Services',
               subtitle: 'Allow Doer to access your location',
               trailing: Switch(
                   value: true, onChanged: (v) {},
-                  activeColor: AppColors.primary)),
+                  activeThumbColor: AppColors.primary)),
           _SettingsTile(
               icon: Icons.delete_outline_rounded,
               title: 'Delete Account',
@@ -367,9 +366,7 @@ class _SettingsTile extends StatelessWidget {
                 ],
               ),
             ),
-            if (trailing != null) trailing!,
-            if (trailing == null)
-              const Icon(Icons.chevron_right_rounded,
+            trailing ?? const Icon(Icons.chevron_right_rounded,
                   color: AppColors.textTertiary, size: 20),
           ],
         ),
