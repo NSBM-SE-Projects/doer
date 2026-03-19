@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/api_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // CONVERSATIONS LIST
@@ -9,47 +10,70 @@ import '../../../core/widgets/common_widgets.dart';
 // Shows: worker avatar, name, last message, time, job title tag.
 // Unread conversations have a subtle gold tint + dot indicator.
 // ──────────────────────────────────────────────────────────────
-class ConversationsScreen extends StatelessWidget {
+class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key});
+  @override
+  State<ConversationsScreen> createState() => _ConversationsScreenState();
+}
+
+class _ConversationsScreenState extends State<ConversationsScreen> {
+  List<dynamic> _conversations = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  Future<void> _fetch() async {
+    try {
+      _conversations = await ApiService().getConversations();
+    } catch (_) {}
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  String _timeAgo(String? d) {
+    if (d == null) return '';
+    try {
+      final diff = DateTime.now().difference(DateTime.parse(d));
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      return '${diff.inDays}d ago';
+    } catch (_) { return ''; }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Messages')),
-      body: ListView(
-        children: [
-          ConversationTile(
-            name: 'Saman Fernando',
-            lastMessage: 'I\'m on my way, should be there in 15 minutes',
-            time: '2m ago',
-            jobTitle: 'Fix kitchen sink leak',
-            unread: true,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ChatScreen()),
-              );
-            },
-          ),
-          const Divider(indent: 76, height: 0),
-          ConversationTile(
-            name: 'Nimal Perera',
-            lastMessage: 'The wiring is done. Please check and confirm.',
-            time: '1h ago',
-            jobTitle: 'Rewire living room',
-            onTap: () {},
-          ),
-          const Divider(indent: 76, height: 0),
-          ConversationTile(
-            name: 'Kumari Silva',
-            lastMessage: 'Thank you for the review!',
-            time: 'Yesterday',
-            jobTitle: 'Deep clean apartment',
-            onTap: () {},
-          ),
-        ],
-      ),
+      body: _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : _conversations.isEmpty
+          ? const EmptyState(icon: '💬', title: 'No messages', subtitle: 'Start a conversation from a job')
+          : RefreshIndicator(
+              onRefresh: _fetch,
+              child: ListView.separated(
+                itemCount: _conversations.length,
+                separatorBuilder: (_, __) => const Divider(indent: 76, height: 0),
+                itemBuilder: (_, i) {
+                  final c = _conversations[i];
+                  final other = c['otherUser'];
+                  final last = c['lastMessage'];
+                  return ConversationTile(
+                    name: other?['name'] ?? 'Worker',
+                    lastMessage: last?['content'] ?? '',
+                    time: _timeAgo(last?['createdAt']),
+                    jobTitle: c['jobTitle'] ?? '',
+                    unread: false,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(
+                      builder: (_) => ChatScreen(jobId: c['jobId'], workerName: other?['name'] ?? 'Worker'),
+                    )),
+                  );
+                },
+              ),
+            ),
     );
   }
 }
@@ -65,7 +89,9 @@ class ConversationsScreen extends StatelessWidget {
 //   - Input bar at bottom with attachment + send button
 // ──────────────────────────────────────────────────────────────
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key});
+  final String? jobId;
+  final String? workerName;
+  const ChatScreen({super.key, this.jobId, this.workerName});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -74,46 +100,50 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
+  bool _isLoading = true;
+  String? _myUserId;
 
-  // Mock conversation data
-  final List<_ChatMessage> _messages = [
-    _ChatMessage(
-      text: 'Hi, I saw your job posting for the kitchen sink repair.',
-      isMe: false,
-      time: '10:30 AM',
-    ),
-    _ChatMessage(
-      text: 'Yes! The sink has been leaking for about a week now.',
-      isMe: true,
-      time: '10:31 AM',
-    ),
-    _ChatMessage(
-      text: 'Can you send me a photo of the leak area? I want to check what tools I need to bring.',
-      isMe: false,
-      time: '10:32 AM',
-    ),
-    _ChatMessage(
-      text: 'Sure, here\'s a photo of under the sink',
-      isMe: true,
-      time: '10:33 AM',
-      isImage: true,
-    ),
-    _ChatMessage(
-      text: 'I see, looks like the seal needs replacing. I have the parts. I can come today at 2 PM. Will that work?',
-      isMe: false,
-      time: '10:35 AM',
-    ),
-    _ChatMessage(
-      text: 'Perfect, 2 PM works for me!',
-      isMe: true,
-      time: '10:36 AM',
-    ),
-    _ChatMessage(
-      text: 'Great! I\'m on my way, should be there in 15 minutes',
-      isMe: false,
-      time: '1:45 PM',
-    ),
-  ];
+  List<_ChatMessage> _messages = [];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.jobId != null) _fetchMessages();
+  }
+
+  Future<void> _fetchMessages() async {
+    try {
+      final meData = await ApiService().getMe();
+      _myUserId = meData['user']?['id'];
+      final list = await ApiService().getMessages(widget.jobId!);
+      setState(() {
+        _messages = list.map((m) => _ChatMessage(
+          text: m['content'] ?? '',
+          isMe: m['sender']?['id'] == _myUserId,
+          time: _formatTime(m['createdAt']),
+        )).toList();
+        _isLoading = false;
+      });
+    } catch (_) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  String _formatTime(String? d) {
+    if (d == null) return '';
+    try {
+      final dt = DateTime.parse(d).toLocal();
+      return '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) { return ''; }
+  }
+
+  Future<void> _sendMessageToApi() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty || widget.jobId == null) return;
+    _messageController.clear();
+    setState(() => _messages.add(_ChatMessage(text: text, isMe: true, time: 'Now')));
+    try { await ApiService().sendMessage(widget.jobId!, text); } catch (_) {}
+  }
 
   @override
   void dispose() {
