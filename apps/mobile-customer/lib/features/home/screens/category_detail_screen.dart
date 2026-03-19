@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
-
+import '../../workers/screens/worker_screens.dart';
 // ──────────────────────────────────────────────────────────────
 // CATEGORY DETAIL SCREEN
 // Shows all workers for a specific service category.
@@ -204,7 +204,13 @@ class CategoryDetailScreen extends StatelessWidget {
                       badge: w.$2,
                       rating: w.$3,
                       distance: w.$4,
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const WorkerProfileScreen()),
+                        );
+                      },
                     ),
                   );
                 },
