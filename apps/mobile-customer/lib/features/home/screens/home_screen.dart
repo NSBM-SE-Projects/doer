@@ -167,7 +167,7 @@ class HomeScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: GestureDetector(
                   onTap: () {
-                    // Switch to My Jobs tab (index 1) — handled by parent MainShell
+                    Navigator.pushNamed(context, '/my-jobs');
                   },
                   child: Container(
                     padding: const EdgeInsets.all(16),
@@ -290,7 +290,7 @@ class HomeScreen extends StatelessWidget {
                   title: 'Recent jobs',
                   actionText: 'View all',
                   onAction: () {
-                    // Switch to My Jobs tab
+                    Navigator.pushNamed(context, '/my-jobs');
                   },
                 ),
               ),

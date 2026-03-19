@@ -43,10 +43,13 @@ class AppRoutes {
 // Route generator — MaterialApp calls this for every Navigator.pushNamed()
 Route<dynamic> generateRoute(RouteSettings settings) {
   switch (settings.name) {
+    case '/my-jobs':
+      return _buildRoute(const MyJobsScreen());
     case '/job-detail':
       return _buildRoute(const JobDetailScreen());
     case '/chat':
-      return _buildRoute(const ChatScreen());case AppRoutes.splash:
+      return _buildRoute(const ChatScreen());
+    case AppRoutes.splash:
       return _buildRoute(const SplashScreen());
     case AppRoutes.onboarding:
       return _buildRoute(const OnboardingScreen());
