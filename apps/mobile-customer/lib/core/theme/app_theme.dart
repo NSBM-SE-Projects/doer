@@ -214,7 +214,7 @@ class AppTheme {
           ),
         ),
         // Cards: white, no shadow, thin border, rounded
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: AppColors.surface,
           elevation: 0,
           shape: RoundedRectangleBorder(

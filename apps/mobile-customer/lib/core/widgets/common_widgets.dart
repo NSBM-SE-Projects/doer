@@ -333,7 +333,7 @@ class _BadgePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: BadgeLevel.color(badge).withOpacity(0.15),
+        color: BadgeLevel.color(badge).withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -410,7 +410,7 @@ class JobStatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: JobStatus.color(status).withOpacity(0.12),
+        color: JobStatus.color(status).withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
@@ -657,7 +657,7 @@ class ConversationTile extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        color: unread ? AppColors.primary.withOpacity(0.04) : Colors.transparent,
+        color: unread ? AppColors.primary.withValues(alpha: 0.04) : Colors.transparent,
         child: Row(
           children: [
             CircleAvatar(
