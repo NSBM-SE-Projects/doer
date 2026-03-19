@@ -171,7 +171,7 @@ class _ChatScreenState extends State<ChatScreen> {
             margin: const EdgeInsets.fromLTRB(20, 8, 20, 8),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.06),
+              color: AppColors.primary.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(

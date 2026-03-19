@@ -344,7 +344,7 @@ class _PaymentMethodTile extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: selected
-              ? AppColors.primary.withOpacity(0.05)
+              ? AppColors.primary.withValues(alpha: 0.05)
               : AppColors.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
@@ -359,7 +359,7 @@ class _PaymentMethodTile extends StatelessWidget {
               height: 40,
               decoration: BoxDecoration(
                 color: selected
-                    ? AppColors.primary.withOpacity(0.1)
+                    ? AppColors.primary.withValues(alpha: 0.1)
                     : AppColors.surfaceVariant,
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -423,7 +423,7 @@ class PaymentHistoryScreen extends StatelessWidget {
               children: [
                 Text('Total Spent',
                     style: AppTypography.bodySmall
-                        .copyWith(color: Colors.white.withOpacity(0.7))),
+                        .copyWith(color: Colors.white.withValues(alpha: 0.7))),
                 const SizedBox(height: 4),
                 Text('Rs. 45,500',
                     style: AppTypography.displayLarge
@@ -431,7 +431,7 @@ class PaymentHistoryScreen extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text('9 completed transactions',
                     style: AppTypography.labelSmall
-                        .copyWith(color: Colors.white.withOpacity(0.7))),
+                        .copyWith(color: Colors.white.withValues(alpha: 0.7))),
               ],
             ),
           ),
@@ -520,7 +520,7 @@ class _TransactionItem extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
+              color: statusColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
