@@ -1,0 +1,203 @@
+import 'package:flutter/material.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../core/widgets/common_widgets.dart';
+
+// ──────────────────────────────────────────────────────────────
+// LOGIN SCREEN (Worker)
+// Workers sign in with email/phone + password.
+// Links to: Register, Forgot Password
+// ──────────────────────────────────────────────────────────────
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _obscurePassword = true;
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 48),
+
+              // App icon
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.construction_rounded,
+                  size: 26,
+                  color: Colors.white,
+                ),
+              ),
+
+              const SizedBox(height: 28),
+
+              Text('Welcome back', style: AppTypography.displayMedium),
+              const SizedBox(height: 8),
+              Text(
+                'Sign in to find jobs and manage your work.',
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+
+              const SizedBox(height: 36),
+
+              // Email / Phone
+              Text('Email or Phone', style: AppTypography.labelMedium),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                style: AppTypography.bodyMedium,
+                decoration: const InputDecoration(
+                  hintText: 'Enter your email or phone',
+                  prefixIcon: Icon(Icons.person_outline_rounded,
+                      color: AppColors.textTertiary, size: 20),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Password
+              Text('Password', style: AppTypography.labelMedium),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _passwordController,
+                obscureText: _obscurePassword,
+                style: AppTypography.bodyMedium,
+                decoration: InputDecoration(
+                  hintText: 'Enter your password',
+                  prefixIcon: const Icon(Icons.lock_outline_rounded,
+                      color: AppColors.textTertiary, size: 20),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      color: AppColors.textTertiary,
+                      size: 20,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/forgot-password');
+                  },
+                  child: Text(
+                    'Forgot password?',
+                    style: AppTypography.labelMedium.copyWith(
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              DoerButton(
+                label: 'Sign In',
+                isLoading: _isLoading,
+                onPressed: () {
+                  setState(() => _isLoading = true);
+                  // TODO: Call Firebase Auth sign in
+                  // On success → Navigator.pushReplacementNamed(context, '/');
+                },
+              ),
+
+              const SizedBox(height: 20),
+
+              Row(
+                children: [
+                  const Expanded(child: Divider(color: AppColors.border)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('or', style: AppTypography.bodySmall),
+                  ),
+                  const Expanded(child: Divider(color: AppColors.border)),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              SizedBox(
+                width: double.infinity,
+                height: AppSizing.buttonHeight,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    // TODO: Google sign in
+                  },
+                  icon: const Icon(Icons.g_mobiledata_rounded,
+                      size: 24, color: AppColors.textPrimary),
+                  label: Text(
+                    'Continue with Google',
+                    style: AppTypography.labelLarge,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    "Don't have an account? ",
+                    style: AppTypography.bodySmall,
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pushNamed(context, '/register');
+                    },
+                    child: Text(
+                      'Sign Up',
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 32),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
