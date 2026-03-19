@@ -6,7 +6,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geolocator/geolocator.dart';
 import '../services/location_service.dart';
 
 class MapScreen extends StatefulWidget {
@@ -14,10 +13,10 @@ class MapScreen extends StatefulWidget {
   final String district;
 
   const MapScreen({
-    Key? key,
+    super.key,
     required this.householdId,
     required this.district,
-  }) : super(key: key);
+  });
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -29,9 +28,6 @@ class _MapScreenState extends State<MapScreen> {
   bool                 _loading        = true;
   String               _searchText     = '';
   List<Map<String, dynamic>> _suggestions = [];
-  double?              _lat;
-  double?              _lng;
-
   // Default: center of Sri Lanka
   static const LatLng _defaultCenter = LatLng(7.8731, 80.7718);
 
@@ -45,7 +41,6 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _initLocation() async {
     final pos = await LocationService.getCurrentPosition();
     if (pos != null) {
-      setState(() { _lat = pos.latitude; _lng = pos.longitude; });
       _mapController?.animateCamera(
         CameraUpdate.newLatLngZoom(LatLng(pos.latitude, pos.longitude), 13),
       );
@@ -103,7 +98,7 @@ class _MapScreenState extends State<MapScreen> {
     if (details == null) return;
     final lat = details['lat'] as double;
     final lng = details['lng'] as double;
-    setState(() { _lat = lat; _lng = lng; _suggestions = []; _searchText = s['description']; });
+    setState(() { _suggestions = []; _searchText = s['description']; });
     _mapController?.animateCamera(CameraUpdate.newLatLngZoom(LatLng(lat, lng), 14));
     await _loadNearbyWorkers(lat, lng);
   }
@@ -218,7 +213,7 @@ class _MapScreenState extends State<MapScreen> {
               child: ListView.separated(
                 shrinkWrap: true,
                 itemCount: _suggestions.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
+                separatorBuilder: (_, _) => const Divider(height: 1),
                 itemBuilder: (_, i) {
                   final s = _suggestions[i];
                   return ListTile(

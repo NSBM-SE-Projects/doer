@@ -4,11 +4,12 @@
 // Replace BASE_URL with your Railway deployment URL.
 
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 
 // ── CONFIG — change this after Railway deploy ──────────────────
-const String BASE_URL = 'https://YOUR-APP.up.railway.app';
+const String baseUrl = 'https://YOUR-APP.up.railway.app';
 // ──────────────────────────────────────────────────────────────
 
 class LocationService {
@@ -25,7 +26,7 @@ class LocationService {
     if (permission == LocationPermission.deniedForever) return null;
 
     return await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
     );
   }
 
@@ -34,7 +35,7 @@ class LocationService {
       String inputText) async {
     try {
       final res = await http.post(
-        Uri.parse('$BASE_URL/location/autocomplete'),
+        Uri.parse('$baseUrl/location/autocomplete'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'input_text': inputText}),
       );
@@ -43,7 +44,7 @@ class LocationService {
         return List<Map<String, dynamic>>.from(data['suggestions']);
       }
     } catch (e) {
-      print('Autocomplete error: $e');
+      debugPrint('Autocomplete error: $e');
     }
     return [];
   }
@@ -53,7 +54,7 @@ class LocationService {
       String placeId) async {
     try {
       final res = await http.post(
-        Uri.parse('$BASE_URL/location/place-details'),
+        Uri.parse('$baseUrl/location/place-details'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'place_id': placeId}),
       );
@@ -61,7 +62,7 @@ class LocationService {
         return jsonDecode(res.body);
       }
     } catch (e) {
-      print('Place details error: $e');
+      debugPrint('Place details error: $e');
     }
     return null;
   }
@@ -75,7 +76,7 @@ class LocationService {
   }) async {
     try {
       final res = await http.post(
-        Uri.parse('$BASE_URL/location/nearby-workers'),
+        Uri.parse('$baseUrl/location/nearby-workers'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'lat': lat,
@@ -89,7 +90,7 @@ class LocationService {
         return List<Map<String, dynamic>>.from(data['workers']);
       }
     } catch (e) {
-      print('Nearby workers error: $e');
+      debugPrint('Nearby workers error: $e');
     }
     return [];
   }
@@ -106,7 +107,7 @@ class LocationService {
   }) async {
     try {
       final res = await http.post(
-        Uri.parse('$BASE_URL/recommend'),
+        Uri.parse('$baseUrl/recommend'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'household_id':    householdId,
@@ -123,7 +124,7 @@ class LocationService {
         return List<Map<String, dynamic>>.from(data['recommendations']);
       }
     } catch (e) {
-      print('Recommendations error: $e');
+      debugPrint('Recommendations error: $e');
     }
     return [];
   }
@@ -136,7 +137,7 @@ class LocationService {
   }) async {
     try {
       await http.post(
-        Uri.parse('$BASE_URL/bookings/add'),
+        Uri.parse('$baseUrl/bookings/add'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'household_id': householdId,
@@ -145,7 +146,7 @@ class LocationService {
         }),
       );
     } catch (e) {
-      print('Record booking error: $e');
+      debugPrint('Record booking error: $e');
     }
   }
 }
