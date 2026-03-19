@@ -26,6 +26,40 @@ enum VerificationStatus {
   REJECTED
 }
 
+enum BadgeLevel {
+  TRAINEE
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+}
+
+enum DocumentType {
+  NIC_FRONT
+  NIC_BACK
+  QUALIFICATION
+  BACKGROUND
+}
+
+enum DocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+}
+
 model User {
   id                 String             @id @default(cuid())
   firebaseUid        String             @unique
@@ -58,21 +92,31 @@ model CustomerProfile {
 }
 
 model WorkerProfile {
-  id                 String             @id @default(cuid())
-  userId             String             @unique
+  id                 String               @id @default(cuid())
+  userId             String               @unique
   bio                String?
   latitude           Float?
   longitude          Float?
   nicNumber          String?
-  verificationStatus VerificationStatus @default(PENDING)
-  isAvailable        Boolean            @default(true)
-  rating             Float              @default(0)
-  totalJobs          Int                @default(0)
+  verificationStatus VerificationStatus   @default(PENDING)
+  isAvailable        Boolean              @default(true)
+  rating             Float                @default(0)
+  totalJobs          Int                  @default(0)
+  hourlyRate         Float?
+  languages          String[]
+  serviceArea        String?
+  serviceRadius      Int                  @default(25)
+  completionRate     Float                @default(0)
+  badgeLevel         BadgeLevel           @default(TRAINEE)
 
-  user               User               @relation(fields: [userId], references: [id])
+  user               User                 @relation(fields: [userId], references: [id])
   categories         WorkerCategory[]
   jobs               Job[]
   reviews            Review[]
+  applications       JobApplication[]
+  documents          VerificationDocument[]
+  payouts            Payout[]
+  subscription       Subscription?
 }
 
 model ServiceCategory {
@@ -96,30 +140,79 @@ model WorkerCategory {
 }
 
 model Job {
-  id          String          @id @default(cuid())
+  id          String           @id @default(cuid())
   title       String
   description String
-  status      JobStatus       @default(OPEN)
+  status      JobStatus        @default(OPEN)
   price       Float?
   latitude    Float?
   longitude   Float?
   address     String?
   scheduledAt DateTime?
   completedAt DateTime?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   customerId  String
   workerId    String?
   categoryId  String
 
-  customer    CustomerProfile @relation(fields: [customerId], references: [id])
-  worker      WorkerProfile?  @relation(fields: [workerId], references: [id])
-  category    ServiceCategory @relation(fields: [categoryId], references: [id])
+  customer     CustomerProfile  @relation(fields: [customerId], references: [id])
+  worker       WorkerProfile?   @relation(fields: [workerId], references: [id])
+  category     ServiceCategory  @relation(fields: [categoryId], references: [id])
 
-  messages    Message[]
-  review      Review?
-  payment     Payment?
+  messages     Message[]
+  review       Review?
+  payment      Payment?
+  applications JobApplication[]
+}
+
+model JobApplication {
+  id        String        @id @default(cuid())
+  jobId     String
+  workerId  String
+  message   String?
+  createdAt DateTime      @default(now())
+
+  job       Job           @relation(fields: [jobId], references: [id])
+  worker    WorkerProfile @relation(fields: [workerId], references: [id])
+
+  @@unique([jobId, workerId])
+}
+
+model VerificationDocument {
+  id        String         @id @default(cuid())
+  workerId  String
+  type      DocumentType
+  fileUrl   String
+  status    DocumentStatus @default(PENDING)
+  createdAt DateTime       @default(now())
+
+  worker    WorkerProfile  @relation(fields: [workerId], references: [id])
+}
+
+model Payout {
+  id          String        @id @default(cuid())
+  workerId    String
+  amount      Float
+  status      PayoutStatus  @default(PENDING)
+  reference   String?
+  requestedAt DateTime      @default(now())
+  processedAt DateTime?
+
+  worker      WorkerProfile @relation(fields: [workerId], references: [id])
+}
+
+model Subscription {
+  id        String             @id @default(cuid())
+  workerId  String             @unique
+  status    SubscriptionStatus @default(INACTIVE)
+  amount    Float              @default(990)
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime           @default(now())
+
+  worker    WorkerProfile      @relation(fields: [workerId], references: [id])
 }
 
 model Review {
