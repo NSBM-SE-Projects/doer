@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/services/api_service.dart';
+import '../../../core/services/socket_service.dart';
+import '../../video/video_call_screen.dart';
 
 // ──────────────────────────────────────────────────────────────
 // CONVERSATIONS LIST
@@ -105,16 +107,38 @@ class _ChatScreenState extends State<ChatScreen> {
 
   List<_ChatMessage> _messages = [];
 
+  String? _myBackendId;
+
   @override
   void initState() {
     super.initState();
-    if (widget.jobId != null) _fetchMessages();
+    if (widget.jobId != null) {
+      _fetchMessages();
+      _listenForRealTimeMessages();
+    }
+  }
+
+  void _listenForRealTimeMessages() {
+    SocketService().joinJob(widget.jobId!);
+    SocketService().onNewMessage = (data) {
+      if (!mounted) return;
+      final senderId = data['sender']?['id'] ?? data['senderId'];
+      if (senderId == _myBackendId) return;
+      setState(() {
+        _messages.add(_ChatMessage(
+          text: data['content'] ?? '',
+          isMe: false,
+          time: _formatTime(data['createdAt']),
+        ));
+      });
+    };
   }
 
   Future<void> _fetchMessages() async {
     try {
       final meData = await ApiService().getMe();
       _myUserId = meData['user']?['id'];
+      _myBackendId = _myUserId;
       final list = await ApiService().getMessages(widget.jobId!);
       setState(() {
         _messages = list.map((m) => _ChatMessage(
@@ -147,6 +171,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    if (widget.jobId != null) {
+      SocketService().leaveJob(widget.jobId!);
+      SocketService().onNewMessage = null;
+    }
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -166,7 +194,8 @@ class _ChatScreenState extends State<ChatScreen> {
             CircleAvatar(
               radius: 16,
               backgroundColor: AppColors.surfaceVariant,
-              child: Text('S',
+              child: Text(
+                  (widget.workerName ?? 'W').isNotEmpty ? (widget.workerName ?? 'W')[0].toUpperCase() : 'W',
                   style: AppTypography.labelMedium
                       .copyWith(color: AppColors.primary)),
             ),
@@ -175,10 +204,10 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Saman Fernando',
+                  Text(widget.workerName ?? 'Worker',
                       style:
                           AppTypography.headlineSmall.copyWith(fontSize: 15)),
-                  Text('Fix kitchen sink leak',
+                  Text(widget.jobId ?? '',
                       style: AppTypography.labelSmall.copyWith(fontSize: 10)),
                 ],
               ),
@@ -188,7 +217,16 @@ class _ChatScreenState extends State<ChatScreen> {
         actions: [
           IconButton(
               icon: const Icon(Icons.videocam_outlined, size: 22),
-              onPressed: () {}),
+              onPressed: () {
+                if (widget.jobId != null) {
+                  Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => VideoCallScreen(
+                      channelName: widget.jobId!,
+                      remoteName: widget.workerName ?? 'Worker',
+                    ),
+                  ));
+                }
+              }),
           IconButton(
               icon: const Icon(Icons.info_outline_rounded, size: 22),
               onPressed: () {}),

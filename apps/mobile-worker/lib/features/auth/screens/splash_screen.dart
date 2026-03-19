@@ -73,15 +73,7 @@ class _SplashScreenState extends State<SplashScreen>
                   width: 180,
                   height: 180,
                 ),
-                const SizedBox(height: 20),
-                Text(
-                  'Doer',
-                  style: AppTypography.displayLarge.copyWith(
-                    color: AppColors.textPrimary,
-                    letterSpacing: -1,
-                  ),
-                ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 8),
                 Text(
                   'For Workers',
                   style: AppTypography.bodySmall.copyWith(

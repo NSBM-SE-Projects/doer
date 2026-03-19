@@ -234,6 +234,10 @@ class ApiService {
     await _dio.patch('/notifications/read-all');
   }
 
+  Future<void> registerFcmToken(String token) async {
+    await _dio.post('/notifications/register-token', data: {'fcmToken': token});
+  }
+
   // ════════════════════════════════════════════════════════════
   // PAYMENTS
   // ════════════════════════════════════════════════════════════

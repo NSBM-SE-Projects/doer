@@ -1,21 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/api_service.dart';
+import 'core/services/socket_service.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'core/services/notification_service.dart';
 
-// ──────────────────────────────────────────────────────────────
-// MAIN ENTRY POINT (Worker App)
-// Restores auth session before runApp so SplashScreen can check
-// currentUser synchronously.
-// ──────────────────────────────────────────────────────────────
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Set up background message handler
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   // Restore saved sessions
   await ApiService().init();
   await AuthService().init();
+
+  // Connect Socket.IO for real-time updates
+  await SocketService().connect();
+
+  // Initialize push notifications
+  await NotificationService().init();
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(

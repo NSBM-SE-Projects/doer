@@ -3,6 +3,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/socket_service.dart';
+import '../../video/video_call_screen.dart';
 
 // ── Conversations List ──
 class ConversationsScreen extends StatefulWidget {
@@ -114,11 +116,31 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isLoading = true;
   String? _myUserId;
 
+  String? _myBackendId;
+
   @override
   void initState() {
     super.initState();
     _myUserId = AuthService().currentUser?.uid;
     _fetchMessages();
+    _listenForRealTimeMessages();
+  }
+
+  void _listenForRealTimeMessages() {
+    SocketService().joinJob(widget.jobId);
+    SocketService().onNewMessage = (data) {
+      if (!mounted) return;
+      final senderId = data['sender']?['id'] ?? data['senderId'];
+      if (senderId == _myBackendId) return; // Don't duplicate own messages
+      setState(() {
+        _messages.add(_Message(
+          data['content'] ?? '',
+          false,
+          _formatTime(data['createdAt']),
+        ));
+      });
+      _scrollToBottom();
+    };
   }
 
   Future<void> _fetchMessages() async {
@@ -127,6 +149,7 @@ class _ChatScreenState extends State<ChatScreen> {
       // We need to get our backend user ID to determine isMe
       final meData = await ApiService().getMe();
       final myId = meData['user']?['id'];
+      _myBackendId = myId;
       setState(() {
         _messages = list.map((m) {
           final senderId = m['sender']?['id'] ?? m['senderId'];
@@ -175,6 +198,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    SocketService().leaveJob(widget.jobId);
+    SocketService().onNewMessage = null;
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -196,6 +221,19 @@ class _ChatScreenState extends State<ChatScreen> {
             Text(widget.jobTitle, style: AppTypography.labelSmall),
           ]),
         ]),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.videocam_rounded, color: AppColors.primary),
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(
+                builder: (_) => VideoCallScreen(
+                  channelName: widget.jobId,
+                  remoteName: widget.clientName,
+                ),
+              ));
+            },
+          ),
+        ],
       ),
       body: Column(children: [
         Expanded(
