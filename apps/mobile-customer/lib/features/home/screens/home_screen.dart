@@ -2,319 +2,265 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/api_service.dart';
+import '../../../core/services/auth_service.dart';
 
-// ──────────────────────────────────────────────────────────────
-// HOME SCREEN
-// The main dashboard customers see. Sections from top to bottom:
-//   1. Header: greeting + location badge + notification bell
-//   2. Hero text: "What do you need done today?"
-//   3. Search bar (tappable → navigates to search screen)
-//   4. Categories: horizontal scroll of service types
-//   5. Active jobs banner: gold card showing ongoing jobs count
-//   6. Top rated workers: list of nearby high-rated workers
-//   7. Recent jobs: latest job cards with status
-// ──────────────────────────────────────────────────────────────
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool _isLoading = true;
+  String _userName = '';
+  List<dynamic> _workers = [];
+  List<dynamic> _myJobs = [];
+  int _activeJobCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final results = await Future.wait([
+        ApiService().getMe(),
+        ApiService().getWorkers(),
+        ApiService().getMyJobs(),
+      ]);
+      final user = (results[0] as Map)['user'];
+      final workers = results[1] as List;
+      final jobsData = results[2] as Map;
+      final jobs = jobsData['jobs'] as List;
+
+      setState(() {
+        _userName = user['name'] ?? AuthService().currentUser?.displayName ?? '';
+        _workers = workers.take(3).toList();
+        _myJobs = jobs;
+        _activeJobCount = jobs.where((j) =>
+          j['status'] == 'OPEN' || j['status'] == 'ASSIGNED' || j['status'] == 'IN_PROGRESS'
+        ).length;
+        _isLoading = false;
+      });
+    } catch (_) {
+      setState(() {
+        _userName = AuthService().currentUser?.displayName ?? '';
+        _isLoading = false;
+      });
+    }
+  }
+
+  String _getCategoryIcon(String? name) {
+    final cat = AppCategories.all.where((c) => c.name.toLowerCase() == (name ?? '').toLowerCase());
+    return cat.isNotEmpty ? cat.first.icon : '🔧';
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── 1. Header ──
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                child: Row(
+        child: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _loadData,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Greeting
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Good morning,',
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.textTertiary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text('Ashen', style: AppTypography.displaySmall),
-                        ],
-                      ),
-                    ),
-                    // Location badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceVariant,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                       child: Row(
-                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.location_on_outlined,
-                              size: 14, color: AppColors.primary),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Colombo',
-                            style: AppTypography.labelSmall.copyWith(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w500,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Good morning,',
+                                  style: AppTypography.bodySmall.copyWith(color: AppColors.textTertiary)),
+                                const SizedBox(height: 2),
+                                Text(_userName.split(' ').first, style: AppTypography.displaySmall),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(10)),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              const Icon(Icons.location_on_outlined, size: 14, color: AppColors.primary),
+                              const SizedBox(width: 4),
+                              Text('Colombo', style: AppTypography.labelSmall.copyWith(
+                                color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
+                            ]),
+                          ),
+                          const SizedBox(width: 10),
+                          GestureDetector(
+                            onTap: () => Navigator.pushNamed(context, '/notifications'),
+                            child: Container(
+                              width: 40, height: 40,
+                              decoration: BoxDecoration(
+                                color: AppColors.surface, borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.border)),
+                              child: Stack(children: [
+                                const Center(child: Icon(Icons.notifications_outlined, size: 20, color: AppColors.textPrimary)),
+                                Positioned(top: 8, right: 8,
+                                  child: Container(width: 8, height: 8,
+                                    decoration: const BoxDecoration(color: AppColors.error, shape: BoxShape.circle))),
+                              ]),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    // Notification bell with red dot
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pushNamed(context, '/notifications');
-                      },
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Stack(
-                          children: [
-                            const Center(
-                              child: Icon(Icons.notifications_outlined,
-                                  size: 20, color: AppColors.textPrimary),
-                            ),
-                            // Unread notification dot
-                            Positioned(
-                              top: 8,
-                              right: 8,
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: const BoxDecoration(
-                                  color: AppColors.error,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                    const SizedBox(height: 20),
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Text('What do you need\ndone today?', style: AppTypography.displayLarge),
+                    ),
+                    const SizedBox(height: 18),
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: DoerSearchBar(onTap: () => Navigator.pushNamed(context, '/search')),
+                    ),
+                    const SizedBox(height: 28),
+
+                    // Categories
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: SectionHeader(title: 'Services', actionText: 'See all', onAction: () {}),
+                    ),
+                    SizedBox(
+                      height: 88,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        itemCount: AppCategories.all.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 14),
+                        itemBuilder: (context, index) {
+                          final cat = AppCategories.all[index];
+                          return CategoryChip(category: cat, compact: true, onTap: () {});
+                        },
                       ),
                     ),
-                  ],
-                ),
-              ),
+                    const SizedBox(height: 28),
 
-              const SizedBox(height: 20),
-
-              // ── 2. Hero Text ──
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  'What do you need\ndone today?',
-                  style: AppTypography.displayLarge,
-                ),
-              ),
-
-              const SizedBox(height: 18),
-
-              // ── 3. Search Bar (tap to navigate) ──
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: DoerSearchBar(
-                  onTap: () {
-                    Navigator.pushNamed(context, '/search');
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 28),
-
-              // ── 4. Service Categories (horizontal scroll) ──
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: SectionHeader(
-                  title: 'Services',
-                  actionText: 'See all',
-                  onAction: () {},
-                ),
-              ),
-              SizedBox(
-                height: 88,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  itemCount: AppCategories.all.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 14),
-                  itemBuilder: (context, index) {
-                    final cat = AppCategories.all[index];
-                    return CategoryChip(
-                      category: cat,
-                      compact: true,
-                      onTap: () {
-                        // TODO: Navigate to category detail
-                      },
-                    );
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 28),
-
-              // ── 5. Active Jobs Banner ──
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: GestureDetector(
-                  onTap: () {
-                    // TODO: Navigate to my jobs
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
+                    // Active jobs banner
+                    if (_activeJobCount > 0)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: const Icon(Icons.work_outline_rounded,
-                              color: Colors.white, size: 22),
+                            color: AppColors.primary, borderRadius: BorderRadius.circular(16)),
+                          child: Row(children: [
+                            Container(
+                              width: 44, height: 44,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(14)),
+                              child: const Icon(Icons.work_outline_rounded, color: Colors.white, size: 22),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text('You have $_activeJobCount active job${_activeJobCount > 1 ? 's' : ''}',
+                                  style: AppTypography.headlineSmall.copyWith(color: Colors.white)),
+                                const SizedBox(height: 2),
+                                Text('Track progress and chat with workers',
+                                  style: AppTypography.bodySmall.copyWith(color: Colors.white.withValues(alpha: 0.8))),
+                              ]),
+                            ),
+                            const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 24),
+                          ]),
                         ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'You have 2 active jobs',
-                                style: AppTypography.headlineSmall.copyWith(
-                                  color: Colors.white,
+                      ),
+
+                    if (_activeJobCount > 0) const SizedBox(height: 28),
+
+                    // Top rated workers
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: SectionHeader(title: 'Top rated near you', actionText: 'See all',
+                        onAction: () => Navigator.pushNamed(context, '/browse-workers')),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: _workers.isEmpty
+                        ? Text('No workers available yet', style: AppTypography.bodySmall)
+                        : Column(
+                            children: _workers.map<Widget>((w) {
+                              final user = w['user'] ?? {};
+                              final cats = w['categories'] as List? ?? [];
+                              final catName = cats.isNotEmpty ? (cats[0]['category']?['name'] ?? '') : '';
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: WorkerCard(
+                                  name: user['name'] ?? '',
+                                  skill: catName,
+                                  badge: BadgeLevel.trainee,
+                                  rating: (w['rating'] ?? 0).toDouble(),
+                                  distance: 0,
+                                  onTap: () {},
                                 ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Track progress and chat with workers',
-                                style: AppTypography.bodySmall.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.8),
-                                ),
-                              ),
-                            ],
+                              );
+                            }).toList(),
                           ),
-                        ),
-                        const Icon(Icons.chevron_right_rounded,
-                            color: Colors.white, size: 24),
-                      ],
                     ),
-                  ),
-                ),
-              ),
+                    const SizedBox(height: 28),
 
-              const SizedBox(height: 28),
-
-              // ── 6. Top Rated Workers ──
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: SectionHeader(
-                  title: 'Top rated near you',
-                  actionText: 'See all',
-                  onAction: () {
-                    Navigator.pushNamed(context, '/browse-workers');
-                  },
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  children: [
-                    WorkerCard(
-                      name: 'Nimal Perera',
-                      skill: 'Electrician',
-                      badge: BadgeLevel.gold,
-                      rating: 4.8,
-                      distance: 2.1,
-                      onTap: () {},
+                    // Recent jobs
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: SectionHeader(title: 'Recent jobs', actionText: 'View all', onAction: () {}),
                     ),
-                    const SizedBox(height: 12),
-                    WorkerCard(
-                      name: 'Saman Fernando',
-                      skill: 'Plumber',
-                      badge: BadgeLevel.silver,
-                      rating: 4.5,
-                      distance: 3.4,
-                      onTap: () {},
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: _myJobs.isEmpty
+                        ? Text('No jobs yet. Post your first job!', style: AppTypography.bodySmall)
+                        : Column(
+                            children: _myJobs.take(3).map<Widget>((job) {
+                              final catName = job['category']?['name'] ?? '';
+                              final workerUser = job['worker']?['user'];
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: JobCard(
+                                  title: job['title'] ?? '',
+                                  category: catName,
+                                  categoryIcon: _getCategoryIcon(catName),
+                                  status: job['status'] ?? 'OPEN',
+                                  budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : 'TBD',
+                                  date: _timeAgo(job['createdAt']),
+                                  workerName: workerUser != null ? workerUser['name'] ?? '' : '',
+                                  onTap: () {},
+                                ),
+                              );
+                            }).toList(),
+                          ),
                     ),
-                    const SizedBox(height: 12),
-                    WorkerCard(
-                      name: 'Kumari Silva',
-                      skill: 'House Cleaning',
-                      badge: BadgeLevel.platinum,
-                      rating: 4.9,
-                      distance: 1.8,
-                      onTap: () {},
-                    ),
+                    const SizedBox(height: 100),
                   ],
                 ),
               ),
-
-              const SizedBox(height: 28),
-
-              // ── 7. Recent Jobs ──
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: SectionHeader(
-                  title: 'Recent jobs',
-                  actionText: 'View all',
-                  onAction: () {},
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  children: [
-                    JobCard(
-                      title: 'Fix kitchen sink leak',
-                      category: 'Plumbing',
-                      categoryIcon: '🔧',
-                      status: JobStatus.inProgress,
-                      budget: 'Rs. 5,000',
-                      date: 'Today',
-                      workerName: 'Saman F.',
-                      onTap: () {},
-                    ),
-                    const SizedBox(height: 12),
-                    JobCard(
-                      title: 'Rewire living room',
-                      category: 'Electrical',
-                      categoryIcon: '⚡',
-                      status: JobStatus.completed,
-                      budget: 'Rs. 12,000',
-                      date: 'Yesterday',
-                      workerName: 'Nimal P.',
-                      onTap: () {},
-                    ),
-                  ],
-                ),
-              ),
-
-              // Bottom padding for nav bar
-              const SizedBox(height: 100),
-            ],
-          ),
-        ),
+            ),
       ),
     );
+  }
+
+  String _timeAgo(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final diff = DateTime.now().difference(DateTime.parse(dateStr));
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      if (diff.inDays == 1) return 'Yesterday';
+      return '${diff.inDays}d ago';
+    } catch (_) { return ''; }
   }
 }

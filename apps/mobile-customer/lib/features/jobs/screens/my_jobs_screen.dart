@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/api_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // MY JOBS SCREEN
@@ -19,11 +20,37 @@ class MyJobsScreen extends StatefulWidget {
 class _MyJobsScreenState extends State<MyJobsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  bool _isLoading = true;
+  List<dynamic> _activeJobs = [];
+  List<dynamic> _completedJobs = [];
+  List<dynamic> _cancelledJobs = [];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _fetchJobs();
+  }
+
+  Future<void> _fetchJobs() async {
+    setState(() => _isLoading = true);
+    try {
+      final data = await ApiService().getMyJobs();
+      final jobs = data['jobs'] as List;
+      setState(() {
+        _activeJobs = jobs.where((j) => j['status'] == 'OPEN' || j['status'] == 'ASSIGNED' || j['status'] == 'IN_PROGRESS').toList();
+        _completedJobs = jobs.where((j) => j['status'] == 'COMPLETED').toList();
+        _cancelledJobs = jobs.where((j) => j['status'] == 'CANCELLED').toList();
+        _isLoading = false;
+      });
+    } catch (_) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  String _getCategoryIcon(String? name) {
+    final cat = AppCategories.all.where((c) => c.name.toLowerCase() == (name ?? '').toLowerCase());
+    return cat.isNotEmpty ? cat.first.icon : '🔧';
   }
 
   @override
@@ -53,21 +80,16 @@ class _MyJobsScreenState extends State<MyJobsScreen>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // Active jobs
-          _buildJobList(isActive: true),
-          // Completed jobs
-          _buildJobList(isActive: false),
-          // Cancelled - show empty state
-          const EmptyState(
-            icon: '📭',
-            title: 'No cancelled jobs',
-            subtitle: 'Jobs you cancel will appear here.',
+      body: _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : TabBarView(
+            controller: _tabController,
+            children: [
+              _buildJobListFromApi(_activeJobs, 'No active jobs', 'Post a job to get started'),
+              _buildJobListFromApi(_completedJobs, 'No completed jobs', 'Completed jobs will appear here'),
+              _buildJobListFromApi(_cancelledJobs, 'No cancelled jobs', 'Jobs you cancel will appear here'),
+            ],
           ),
-        ],
-      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           Navigator.pushNamed(context, '/post-job');
@@ -80,37 +102,46 @@ class _MyJobsScreenState extends State<MyJobsScreen>
     );
   }
 
-  Widget _buildJobList({required bool isActive}) {
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        JobCard(
-          title: 'Fix kitchen sink leak',
-          category: 'Plumbing',
-          categoryIcon: '🔧',
-          status: isActive ? JobStatus.inProgress : JobStatus.completed,
-          budget: 'Rs. 5,000',
-          date: 'Today',
-          workerName: 'Saman F.',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const JobDetailScreen()),
-            );
-          },
-        ),
-        const SizedBox(height: 12),
-        JobCard(
-          title: 'Paint bedroom walls',
-          category: 'Painting',
-          categoryIcon: '🎨',
-          status: isActive ? JobStatus.posted : JobStatus.reviewed,
-          budget: 'Rs. 15,000',
-          date: 'Mar 25',
-          onTap: () {},
-        ),
-      ],
+  Widget _buildJobListFromApi(List<dynamic> jobs, String emptyTitle, String emptySub) {
+    if (jobs.isEmpty) {
+      return EmptyState(icon: '📭', title: emptyTitle, subtitle: emptySub);
+    }
+    return RefreshIndicator(
+      onRefresh: _fetchJobs,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(20),
+        itemCount: jobs.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        itemBuilder: (_, i) {
+          final job = jobs[i];
+          final catName = job['category']?['name'] ?? '';
+          final workerUser = job['worker']?['user'];
+          return JobCard(
+            title: job['title'] ?? '',
+            category: catName,
+            categoryIcon: _getCategoryIcon(catName),
+            status: (job['status'] ?? 'OPEN').toString().toLowerCase(),
+            budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : 'TBD',
+            date: _timeAgo(job['createdAt']),
+            workerName: workerUser?['name'] ?? '',
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const JobDetailScreen()));
+            },
+          );
+        },
+      ),
     );
+  }
+
+  String _timeAgo(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final diff = DateTime.now().difference(DateTime.parse(dateStr));
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      if (diff.inDays == 1) return 'Yesterday';
+      return '${diff.inDays}d ago';
+    } catch (_) { return ''; }
   }
 }
 

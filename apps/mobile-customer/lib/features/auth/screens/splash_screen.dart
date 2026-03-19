@@ -69,18 +69,10 @@ class _SplashScreenState extends State<SplashScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: const Icon(
-                    Icons.home_repair_service_rounded,
-                    size: 40,
-                    color: Colors.white,
-                  ),
+                Image.asset(
+                  'assets/images/doer_logo.png',
+                  width: 180,
+                  height: 180,
                 ),
                 const SizedBox(height: 20),
                 Text(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/api_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // POST JOB SCREEN
@@ -28,11 +29,26 @@ class _PostJobScreenState extends State<PostJobScreen> {
   final _budgetMinController = TextEditingController();
   final _budgetMaxController = TextEditingController();
   String? _selectedCategory;
+  String? _selectedCategoryId;
   String _urgency = 'normal';
   DateTime? _preferredDate;
   TimeOfDay? _preferredTime;
+  bool _isSubmitting = false;
+  List<dynamic> _apiCategories = [];
 
   final _steps = ['Category', 'Details', 'Budget & Time', 'Photos', 'Review'];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      _apiCategories = await ApiService().getCategories();
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -123,12 +139,43 @@ class _PostJobScreenState extends State<PostJobScreen> {
                   child: DoerButton(
                     label:
                         _step == _steps.length - 1 ? 'Post Job' : 'Continue',
-                    onPressed: () {
+                    isLoading: _isSubmitting,
+                    onPressed: () async {
                       if (_step < _steps.length - 1) {
                         setState(() => _step++);
                       } else {
-                        // TODO: Submit job to backend
-                        Navigator.pop(context);
+                        // Find category ID from API categories
+                        String? catId = _selectedCategoryId;
+                        if (catId == null && _selectedCategory != null) {
+                          final match = _apiCategories.where((c) =>
+                            (c['name'] as String).toLowerCase() == _selectedCategory!.toLowerCase());
+                          if (match.isNotEmpty) catId = match.first['id'];
+                        }
+                        if (catId == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Please select a category')));
+                          return;
+                        }
+                        setState(() => _isSubmitting = true);
+                        try {
+                          final budgetMax = double.tryParse(_budgetMaxController.text) ??
+                              double.tryParse(_budgetMinController.text);
+                          await ApiService().createJob(
+                            title: _titleController.text.trim(),
+                            description: _descController.text.trim(),
+                            categoryId: catId,
+                            price: budgetMax,
+                            scheduledAt: _preferredDate?.toIso8601String(),
+                          );
+                          if (mounted) Navigator.pop(context);
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(ApiService.errorMessage(e))));
+                          }
+                        } finally {
+                          if (mounted) setState(() => _isSubmitting = false);
+                        }
                       }
                     },
                   ),
