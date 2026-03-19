@@ -74,19 +74,11 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               const SizedBox(height: 48),
 
-              // App icon
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  Icons.construction_rounded,
-                  size: 26,
-                  color: Colors.white,
-                ),
+              // App logo
+              Image.asset(
+                'assets/images/doer_logo.png',
+                width: 140,
+                height: 140,
               ),
 
               const SizedBox(height: 28),

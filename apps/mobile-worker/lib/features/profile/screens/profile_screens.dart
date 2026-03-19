@@ -2,21 +2,68 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/api_service.dart';
+import '../../../core/services/auth_service.dart';
+import '../../../core/router/app_router.dart';
 
-// ──────────────────────────────────────────────────────────────
-// PROFILE SCREEN
-// Worker's profile management. Shows:
-//   - Avatar, name, badge level, rating, completion stats
-//   - Skills / services offered
-//   - Service area (district)
-//   - Hourly rate
-//   - Edit profile + settings links
-// ──────────────────────────────────────────────────────────────
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool _isLoading = true;
+  String _name = '';
+  String _email = '';
+  String _phone = '';
+  double _rating = 0;
+  int _totalJobs = 0;
+  String _verificationStatus = 'PENDING';
+  String _bio = '';
+  List<String> _services = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  Future<void> _fetch() async {
+    try {
+      final data = await ApiService().getMe();
+      final user = data['user'];
+      final wp = user['workerProfile'];
+      setState(() {
+        _name = user['name'] ?? '';
+        _email = user['email'] ?? '';
+        _phone = user['phone'] ?? '';
+        _rating = (wp?['rating'] ?? 0).toDouble();
+        _totalJobs = wp?['totalJobs'] ?? 0;
+        _verificationStatus = wp?['verificationStatus'] ?? 'PENDING';
+        _bio = wp?['bio'] ?? '';
+        final cats = wp?['categories'] as List? ?? [];
+        _services = cats.map<String>((c) => c['category']?['name'] ?? '').where((s) => s.isNotEmpty).toList();
+        _isLoading = false;
+      });
+    } catch (_) {
+      _name = AuthService().currentUser?.displayName ?? '';
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _signOut() async {
+    await AuthService().signOut();
+    if (mounted) {
+      Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (_) => false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -66,34 +113,35 @@ class ProfileScreen extends StatelessWidget {
                         backgroundColor: AppColors.primaryLight
                             .withValues(alpha: 0.3),
                         child: Text(
-                          'K',
+                          _name.isNotEmpty ? _name[0].toUpperCase() : '?',
                           style: AppTypography.displayMedium.copyWith(
                             color: AppColors.primary,
                           ),
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Text('Kasun Perera', style: AppTypography.headlineLarge),
+                      Text(_name, style: AppTypography.headlineLarge),
                       const SizedBox(height: 4),
                       Text(
-                        'Plumber & Electrician',
+                        _services.isNotEmpty ? _services.join(' & ') : _bio.isNotEmpty ? _bio : 'Worker',
                         style: AppTypography.bodySmall,
                       ),
                       const SizedBox(height: 10),
-                      const BadgePill(badge: BadgeLevel.silver),
+                      BadgePill(badge: _verificationStatus == 'VERIFIED'
+                          ? BadgeLevel.bronze : BadgeLevel.trainee),
                       const SizedBox(height: 16),
 
                       // Stats row
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _StatItem(label: 'Rating', value: '4.8'),
+                          _StatItem(label: 'Rating', value: _rating.toStringAsFixed(1)),
                           Container(
                               width: 1, height: 32, color: AppColors.border),
-                          _StatItem(label: 'Jobs Done', value: '47'),
+                          _StatItem(label: 'Jobs Done', value: '$_totalJobs'),
                           Container(
                               width: 1, height: 32, color: AppColors.border),
-                          _StatItem(label: 'Completion', value: '96%'),
+                          _StatItem(label: 'Completion', value: '${_totalJobs > 0 ? 96 : 0}%'),
                         ],
                       ),
                     ],
@@ -136,7 +184,7 @@ class ProfileScreen extends StatelessWidget {
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: ['🔧 Plumbing', '⚡ Electrical']
+                      children: (_services.isEmpty ? ['No services added'] : _services)
                           .map((s) => Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 8),
@@ -185,7 +233,7 @@ class ProfileScreen extends StatelessWidget {
                     _InfoRow(
                       icon: Icons.phone_outlined,
                       label: 'Phone',
-                      value: '+94 77 123 4567',
+                      value: _phone.isNotEmpty ? _phone : 'Not set',
                     ),
                   ],
                 ),
@@ -226,9 +274,7 @@ class ProfileScreen extends StatelessWidget {
                       icon: Icons.logout_rounded,
                       label: 'Sign Out',
                       isDestructive: true,
-                      onTap: () {
-                        // TODO: Firebase Auth sign out
-                      },
+                      onTap: _signOut,
                     ),
                   ],
                 ),
@@ -338,10 +384,27 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  final _nameController = TextEditingController(text: 'Kasun Perera');
-  final _phoneController = TextEditingController(text: '+94 77 123 4567');
-  final _rateController = TextEditingController(text: '800');
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _rateController = TextEditingController();
   bool _isLoading = false;
+  bool _isFetching = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final data = await ApiService().getMe();
+      final user = data['user'];
+      _nameController.text = user['name'] ?? '';
+      _phoneController.text = user['phone'] ?? '';
+    } catch (_) {}
+    setState(() => _isFetching = false);
+  }
 
   @override
   void dispose() {
@@ -435,9 +498,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             DoerButton(
               label: 'Save Changes',
               isLoading: _isLoading,
-              onPressed: () {
+              onPressed: () async {
                 setState(() => _isLoading = true);
-                // TODO: Update worker profile via API
+                try {
+                  await ApiService().updateProfile(
+                    name: _nameController.text.trim(),
+                    phone: _phoneController.text.trim(),
+                  );
+                  if (mounted) Navigator.pop(context);
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(ApiService.errorMessage(e))));
+                  }
+                } finally {
+                  if (mounted) setState(() => _isLoading = false);
+                }
               },
             ),
           ],

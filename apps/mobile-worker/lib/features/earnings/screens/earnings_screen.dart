@@ -1,29 +1,48 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/api_service.dart';
 
-// ──────────────────────────────────────────────────────────────
-// EARNINGS SCREEN
-// Shows worker's full earnings breakdown:
-//   - Total / pending / this month summary card
-//   - Payout history list
-// Workers keep 100% earnings (flat monthly subscription model).
-// ──────────────────────────────────────────────────────────────
-class EarningsScreen extends StatelessWidget {
+class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
+  @override
+  State<EarningsScreen> createState() => _EarningsScreenState();
+}
 
-  static const _payouts = [
-    _PayoutData('Fix kitchen plumbing', 'Rs. 3,500', 'Mar 15, 2026',
-        'Nimal Jayawardena', true),
-    _PayoutData('Install ceiling fan', 'Rs. 2,000', 'Mar 12, 2026',
-        'Priya Fernando', true),
-    _PayoutData('House deep cleaning', 'Rs. 4,200', 'Mar 8, 2026',
-        'Amali Senanayake', true),
-    _PayoutData('Paint bedroom walls', 'Rs. 6,500', 'Mar 3, 2026',
-        'Saman Wickramasinghe', true),
-    _PayoutData('Garden maintenance', 'Rs. 1,800', 'Feb 28, 2026',
-        'Kasun Ranasinghe', false),
-  ];
+class _EarningsScreenState extends State<EarningsScreen> {
+  bool _isLoading = true;
+  List<dynamic> _payments = [];
+  double _totalEarnings = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  Future<void> _fetch() async {
+    try {
+      _payments = await ApiService().getMyPayments();
+      _totalEarnings = 0;
+      for (final p in _payments) {
+        if (p['status'] == 'COMPLETED') {
+          _totalEarnings += (p['amount'] ?? 0).toDouble();
+        }
+      }
+      setState(() => _isLoading = false);
+    } catch (_) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final dt = DateTime.parse(dateStr);
+      final months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+    } catch (_) { return ''; }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,168 +55,118 @@ class EarningsScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: CustomScrollView(
-        slivers: [
-          // Earnings summary card
-          const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(20, 8, 20, 0),
-              child: EarningsSummaryCard(
-                totalEarnings: 'Rs. 48,500',
-                pendingPayout: 'Rs. 6,200',
-                thisMonth: 'Rs. 12,800',
-              ),
-            ),
-          ),
-
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-          // Subscription status
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.border),
+      body: _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                  child: EarningsSummaryCard(
+                    totalEarnings: 'Rs. ${_totalEarnings.toStringAsFixed(0)}',
+                    pendingPayout: 'Rs. ${_payments.where((p) => p['status'] == 'PENDING').fold<double>(0, (sum, p) => sum + (p['amount'] ?? 0).toDouble()).toStringAsFixed(0)}',
+                    thisMonth: '${_payments.length} payments',
+                  ),
                 ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryLight.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.subscriptions_outlined,
-                          color: AppColors.primary, size: 22),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+              // Subscription status
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface, borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.border),
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Monthly Subscription',
-                              style: AppTypography.headlineSmall),
-                          Text(
-                            'Active · Renews Apr 1, 2026',
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.success,
+                    child: Row(children: [
+                      Container(
+                        width: 44, height: 44,
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLight.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(12)),
+                        child: const Icon(Icons.subscriptions_outlined, color: AppColors.primary, size: 22),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('Monthly Subscription', style: AppTypography.headlineSmall),
+                          Text('Active · Renews Apr 1, 2026',
+                            style: AppTypography.bodySmall.copyWith(color: AppColors.success)),
+                        ]),
+                      ),
+                      Text('Rs. 990/mo', style: AppTypography.headlineSmall.copyWith(color: AppColors.primary)),
+                    ]),
+                  ),
+                ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: SectionHeader(title: 'Payment History'),
+                ),
+              ),
+
+              _payments.isEmpty
+                ? const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.all(40),
+                      child: EmptyState(icon: '💰', title: 'No payments yet',
+                          subtitle: 'Complete jobs to see your payment history'),
+                    ),
+                  )
+                : SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final p = _payments[index];
+                          final job = p['job'];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: AppColors.surface, borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: AppColors.border)),
+                              child: Row(children: [
+                                Container(
+                                  width: 40, height: 40,
+                                  decoration: BoxDecoration(
+                                    color: p['status'] == 'COMPLETED' ? AppColors.successLight : AppColors.warningLight,
+                                    borderRadius: BorderRadius.circular(10)),
+                                  child: Icon(
+                                    p['status'] == 'COMPLETED' ? Icons.check_circle_outline : Icons.schedule,
+                                    color: p['status'] == 'COMPLETED' ? AppColors.success : AppColors.warning, size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                    Text(job?['title'] ?? 'Payment', style: AppTypography.headlineSmall),
+                                    const SizedBox(height: 2),
+                                    Text(p['status'] ?? '', style: AppTypography.bodySmall),
+                                  ]),
+                                ),
+                                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                                  Text('Rs. ${(p['amount'] ?? 0).toStringAsFixed(0)}',
+                                    style: AppTypography.headlineSmall.copyWith(color: AppColors.success)),
+                                  Text(_formatDate(p['createdAt']), style: AppTypography.labelSmall),
+                                ]),
+                              ]),
                             ),
-                          ),
-                        ],
+                          );
+                        },
+                        childCount: _payments.length,
                       ),
                     ),
-                    Text(
-                      'Rs. 990/mo',
-                      style: AppTypography.headlineSmall.copyWith(
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-          // Payout history header
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: SectionHeader(title: 'Payout History'),
-            ),
-          ),
-
-          // Payout list
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final payout = _payouts[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _PayoutCard(payout: payout),
-                  );
-                },
-                childCount: _payouts.length,
-              ),
-            ),
-          ),
-
-          const SliverToBoxAdapter(child: SizedBox(height: 32)),
-        ],
-      ),
-    );
-  }
-}
-
-class _PayoutCard extends StatelessWidget {
-  final _PayoutData payout;
-  const _PayoutCard({super.key, required this.payout});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.successLight,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.account_balance_wallet_outlined,
-                color: AppColors.success, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(payout.jobTitle, style: AppTypography.headlineSmall),
-                const SizedBox(height: 2),
-                Text(payout.clientName, style: AppTypography.bodySmall),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                payout.amount,
-                style: AppTypography.headlineSmall.copyWith(
-                  color: AppColors.success,
-                ),
-              ),
-              Text(payout.date, style: AppTypography.labelSmall),
+                  ),
+              const SliverToBoxAdapter(child: SizedBox(height: 32)),
             ],
           ),
-        ],
-      ),
     );
   }
-}
-
-class _PayoutData {
-  final String jobTitle;
-  final String amount;
-  final String date;
-  final String clientName;
-  final bool isPaid;
-
-  const _PayoutData(
-      this.jobTitle, this.amount, this.date, this.clientName, this.isPaid);
 }

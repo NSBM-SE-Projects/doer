@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
 import 'core/services/auth_service.dart';
+import 'core/services/api_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // MAIN ENTRY POINT (Worker App)
@@ -12,7 +13,8 @@ import 'core/services/auth_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Restore saved login session (fills AuthService singleton)
+  // Restore saved sessions
+  await ApiService().init();
   await AuthService().init();
 
   SystemChrome.setSystemUIOverlayStyle(
