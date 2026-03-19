@@ -5,6 +5,7 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/AppError';
 import { getIO } from '../sockets';
+import { createNotification } from './notifications';
 
 const router = Router();
 
@@ -76,6 +77,17 @@ router.post(
     const io = getIO();
     if (io) {
       io.to(`job:${jobId}`).emit('new_message', message);
+    }
+
+    // Push notification to the other person
+    const recipientId = isCustomer ? job.worker?.userId : job.customer.userId;
+    if (recipientId) {
+      const senderName = message.sender.name || 'Someone';
+      await createNotification(
+        recipientId,
+        `New message from ${senderName}`,
+        content.length > 80 ? content.substring(0, 80) + '...' : content
+      );
     }
 
     res.status(201).json({ message });

@@ -4,6 +4,7 @@ import prisma from '../config/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/AppError';
+import { createNotification } from './notifications';
 
 const router = Router();
 
@@ -76,6 +77,30 @@ router.patch(
       where: { jobId },
       data: { status, payhereRef },
     });
+
+    // Notify both parties on payment status change
+    if (status === 'COMPLETED') {
+      const job = await prisma.job.findUnique({
+        where: { id: jobId },
+        include: { customer: true, worker: true },
+      });
+      if (job) {
+        if (job.customer) {
+          await createNotification(
+            job.customer.userId,
+            'Payment Confirmed',
+            `Payment of Rs. ${payment.amount} for "${job.title}" has been confirmed`
+          );
+        }
+        if (job.worker) {
+          await createNotification(
+            job.worker.userId,
+            'Payment Received',
+            `Rs. ${payment.amount} has been added to your earnings for "${job.title}"`
+          );
+        }
+      }
+    }
 
     res.json({ payment: updated });
   })

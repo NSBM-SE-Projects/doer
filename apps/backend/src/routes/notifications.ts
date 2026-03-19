@@ -4,10 +4,11 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/AppError';
 import { getIO } from '../sockets';
+import admin, { isFirebaseConfigured } from '../config/firebase';
 
 const router = Router();
 
-// GET /api/notifications — get notifications for current user
+// GET /api/notifications
 router.get(
   '/',
   authenticate,
@@ -26,7 +27,7 @@ router.get(
   })
 );
 
-// PATCH /api/notifications/:id/read — mark single notification as read
+// PATCH /api/notifications/:id/read
 router.patch(
   '/:id/read',
   authenticate,
@@ -46,7 +47,7 @@ router.patch(
   })
 );
 
-// PATCH /api/notifications/read-all — mark all as read
+// PATCH /api/notifications/read-all
 router.patch(
   '/read-all',
   authenticate,
@@ -60,7 +61,24 @@ router.patch(
   })
 );
 
-// Helper: create a notification and push via Socket.IO
+// POST /api/notifications/register-token — store FCM device token
+router.post(
+  '/register-token',
+  authenticate,
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { fcmToken } = req.body;
+    if (!fcmToken) throw AppError.badRequest('fcmToken is required');
+
+    // Store FCM token on the user (we'll add this field to schema)
+    // For now, store in Redis for quick lookup
+    const redisClient = (await import('../config/redis')).default;
+    await redisClient.set(`fcm:${req.user!.userId}`, fcmToken);
+
+    res.json({ message: 'Token registered' });
+  })
+);
+
+// Helper: create notification + Socket.IO push + FCM push
 export async function createNotification(
   userId: string,
   title: string,
@@ -70,9 +88,38 @@ export async function createNotification(
     data: { userId, title, body },
   });
 
+  // Push via Socket.IO (real-time, if user is connected)
   const io = getIO();
   if (io) {
     io.to(`user:${userId}`).emit('new_notification', notification);
+  }
+
+  // Push via FCM (works even when app is in background/closed)
+  if (isFirebaseConfigured) {
+    try {
+      const redisClient = (await import('../config/redis')).default;
+      const fcmToken = await redisClient.get(`fcm:${userId}`);
+      if (fcmToken) {
+        await admin.messaging().send({
+          token: fcmToken,
+          notification: { title, body },
+          data: {
+            notificationId: notification.id,
+            type: 'notification',
+          },
+          android: {
+            priority: 'high',
+            notification: { sound: 'default', channelId: 'doer_notifications' },
+          },
+          apns: {
+            payload: { aps: { sound: 'default', badge: 1 } },
+          },
+        });
+      }
+    } catch (e) {
+      // FCM push is best-effort — don't fail the whole operation
+      console.warn('FCM push failed:', e);
+    }
   }
 
   return notification;
