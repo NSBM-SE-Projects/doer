@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
+import 'core/services/auth_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // MAIN ENTRY POINT (Worker App)
-// Initializes Firebase before runApp, then starts at SplashScreen.
+// Restores auth session before runApp so SplashScreen can check
+// currentUser synchronously.
 // ──────────────────────────────────────────────────────────────
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // Restore saved login session (fills AuthService singleton)
+  await AuthService().init();
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
