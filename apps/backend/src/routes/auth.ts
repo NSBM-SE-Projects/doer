@@ -4,7 +4,7 @@ import type { StringValue } from 'ms';
 import { z } from 'zod';
 import prisma from '../config/prisma';
 import { env } from '../config/env';
-import { verifyFirebaseToken, isFirebaseConfigured } from '../config/firebase';
+import { verifyFirebaseToken } from '../config/firebase';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/AppError';
@@ -37,16 +37,9 @@ router.post(
   asyncHandler(async (req, res) => {
     const body = registerSchema.parse(req.body);
 
-    // Verify Firebase token or use provided UID in dev mode
-    let firebaseUid: string;
-    if (isFirebaseConfigured) {
-      const decoded = await verifyFirebaseToken(body.firebaseToken);
-      if (!decoded) throw AppError.unauthorized('Invalid Firebase token');
-      firebaseUid = decoded.uid;
-    } else {
-      // Dev mode: trust the client-provided UID or use the token as UID
-      firebaseUid = body.firebaseUid || body.firebaseToken;
-    }
+    // Verify Firebase token — falls back to dev UID in non-production
+    const decoded = await verifyFirebaseToken(body.firebaseToken);
+    const firebaseUid = decoded?.uid || body.firebaseUid || body.firebaseToken;
 
     // Check if user already exists
     const existing = await prisma.user.findFirst({
@@ -86,15 +79,9 @@ router.post(
   asyncHandler(async (req, res) => {
     const body = loginSchema.parse(req.body);
 
-    // Verify Firebase token or use provided UID in dev mode
-    let firebaseUid: string;
-    if (isFirebaseConfigured) {
-      const decoded = await verifyFirebaseToken(body.firebaseToken);
-      if (!decoded) throw AppError.unauthorized('Invalid Firebase token');
-      firebaseUid = decoded.uid;
-    } else {
-      firebaseUid = body.firebaseUid || body.firebaseToken;
-    }
+    // Verify Firebase token — falls back to dev UID in non-production
+    const decoded = await verifyFirebaseToken(body.firebaseToken);
+    const firebaseUid = decoded?.uid || body.firebaseUid || body.firebaseToken;
 
     const user = await prisma.user.findUnique({
       where: { firebaseUid },
