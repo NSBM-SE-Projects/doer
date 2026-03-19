@@ -39,8 +39,25 @@ class DoerCustomerApp extends StatelessWidget {
       title: 'Doer',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      builder: (context, child) {
+        return ScrollConfiguration(
+          behavior: const _NoOverscrollBehavior(),
+          child: child!,
+        );
+      },
       initialRoute: AppRoutes.splash,
       onGenerateRoute: generateRoute,
     );
+  }
+}
+
+// Removes the stretchy overscroll effect globally
+class _NoOverscrollBehavior extends ScrollBehavior {
+  const _NoOverscrollBehavior();
+
+  @override
+  Widget buildOverscrollIndicator(
+      BuildContext context, Widget child, ScrollableDetails details) {
+    return child; // no glow or stretch effect
   }
 }
