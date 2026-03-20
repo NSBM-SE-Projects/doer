@@ -53,6 +53,21 @@ class _MyJobsScreenState extends State<MyJobsScreen>
     return cat.isNotEmpty ? cat.first.icon : '🔧';
   }
 
+  /// Map backend status (OPEN, ASSIGNED, etc.) to app status (posted, worker_accepted, etc.)
+  String _mapStatus(String? backendStatus) {
+    switch (backendStatus?.toUpperCase()) {
+      case 'OPEN': return JobStatus.posted;
+      case 'APPLICATIONS_RECEIVED': return JobStatus.applicationsReceived;
+      case 'ASSIGNED': return JobStatus.workerAccepted;
+      case 'IN_PROGRESS': return JobStatus.inProgress;
+      case 'COMPLETED': return JobStatus.completed;
+      case 'REVIEWING': return JobStatus.reviewed;
+      case 'CLOSED': return JobStatus.closed;
+      case 'CANCELLED': return JobStatus.cancelled;
+      default: return JobStatus.posted;
+    }
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -120,7 +135,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
             title: job['title'] ?? '',
             category: catName,
             categoryIcon: _getCategoryIcon(catName),
-            status: (job['status'] ?? 'OPEN').toString().toLowerCase(),
+            status: _mapStatus(job['status']),
             budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : 'TBD',
             date: _timeAgo(job['createdAt']),
             workerName: workerUser?['name'] ?? '',

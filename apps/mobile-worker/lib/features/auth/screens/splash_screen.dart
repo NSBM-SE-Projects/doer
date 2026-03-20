@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/api_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // SPLASH SCREEN
@@ -36,17 +37,33 @@ class _SplashScreenState extends State<SplashScreen>
     );
     _controller.forward();
 
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        if (_authService.currentUser != null) {
-          // Already logged in → go straight to home
-          Navigator.pushReplacementNamed(context, '/');
-        } else {
-          // Not logged in → show onboarding
-          Navigator.pushReplacementNamed(context, '/onboarding');
-        }
+    Future.delayed(const Duration(seconds: 2), () async {
+      if (!mounted) return;
+      final user = _authService.currentUser;
+      if (user != null) {
+        await _ensureBackendAuth(user);
+        if (mounted) Navigator.pushReplacementNamed(context, '/');
+      } else {
+        if (mounted) Navigator.pushReplacementNamed(context, '/onboarding');
       }
     });
+  }
+
+  Future<void> _ensureBackendAuth(WorkerUser user) async {
+    try {
+      try {
+        await ApiService().login(firebaseToken: user.idToken, firebaseUid: user.uid);
+      } catch (_) {
+        await ApiService().register(
+          firebaseToken: user.idToken,
+          firebaseUid: user.uid,
+          email: user.email,
+          name: user.displayName ?? user.email.split('@').first,
+        );
+      }
+    } catch (e) {
+      print('Backend sync failed: $e');
+    }
   }
 
   @override

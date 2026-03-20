@@ -1,20 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/services/api_service.dart';
+import 'location_picker_screen.dart';
 
-// ──────────────────────────────────────────────────────────────
-// POST JOB SCREEN
-// 5-step wizard for creating a new job posting:
-//   Step 1: Pick service category
-//   Step 2: Title + description + location
-//   Step 3: Budget range + urgency + date/time
-//   Step 4: Upload reference photos
-//   Step 5: Review everything before posting
-// Progress bar at top shows which step you're on.
-// Back/Continue buttons at bottom navigate between steps.
-// ──────────────────────────────────────────────────────────────
 class PostJobScreen extends StatefulWidget {
   const PostJobScreen({super.key});
 
@@ -30,11 +22,20 @@ class _PostJobScreenState extends State<PostJobScreen> {
   final _budgetMaxController = TextEditingController();
   String? _selectedCategory;
   String? _selectedCategoryId;
-  String _urgency = 'normal';
+  String _urgency = 'NORMAL';
   DateTime? _preferredDate;
   TimeOfDay? _preferredTime;
   bool _isSubmitting = false;
   List<dynamic> _apiCategories = [];
+
+  // Location
+  String? _address;
+  double? _latitude;
+  double? _longitude;
+
+  // Photos
+  final List<XFile> _photos = [];
+  final _picker = ImagePicker();
 
   final _steps = ['Category', 'Details', 'Budget & Time', 'Photos', 'Review'];
 
@@ -47,7 +48,11 @@ class _PostJobScreenState extends State<PostJobScreen> {
   Future<void> _loadCategories() async {
     try {
       _apiCategories = await ApiService().getCategories();
-    } catch (_) {}
+      print('Loaded ${_apiCategories.length} categories from API');
+      if (mounted) setState(() {});
+    } catch (e) {
+      print('Failed to load categories: $e');
+    }
   }
 
   @override
@@ -57,6 +62,161 @@ class _PostJobScreenState extends State<PostJobScreen> {
     _budgetMinController.dispose();
     _budgetMaxController.dispose();
     super.dispose();
+  }
+
+  /// Validate current step before proceeding
+  bool _validateStep() {
+    switch (_step) {
+      case 0: // Category
+        if (_selectedCategory == null) {
+          _showError('Please select a service category');
+          return false;
+        }
+        return true;
+      case 1: // Details
+        if (_titleController.text.trim().isEmpty) {
+          _showError('Please enter a job title');
+          return false;
+        }
+        if (_titleController.text.trim().length < 5) {
+          _showError('Job title must be at least 5 characters');
+          return false;
+        }
+        if (_descController.text.trim().isEmpty) {
+          _showError('Please describe the job');
+          return false;
+        }
+        if (_descController.text.trim().length < 10) {
+          _showError('Description must be at least 10 characters');
+          return false;
+        }
+        if (_address == null) {
+          _showError('Please select a location');
+          return false;
+        }
+        return true;
+      case 2: // Budget
+        if (_budgetMinController.text.isEmpty && _budgetMaxController.text.isEmpty) {
+          _showError('Please enter a budget range');
+          return false;
+        }
+        final min = double.tryParse(_budgetMinController.text);
+        final max = double.tryParse(_budgetMaxController.text);
+        if (min != null && max != null && min > max) {
+          _showError('Minimum budget cannot exceed maximum');
+          return false;
+        }
+        return true;
+      case 3: // Photos (optional)
+        return true;
+      default:
+        return true;
+    }
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: AppColors.error));
+  }
+
+  Future<void> _pickPhotos() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded),
+              title: const Text('Take Photo'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded),
+              title: const Text('Choose from Gallery'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+
+    if (source == ImageSource.camera) {
+      final photo = await _picker.pickImage(source: ImageSource.camera, maxWidth: 1200, imageQuality: 80);
+      if (photo != null) setState(() => _photos.add(photo));
+    } else {
+      final photos = await _picker.pickMultiImage(maxWidth: 1200, imageQuality: 80);
+      if (photos.isNotEmpty) setState(() => _photos.addAll(photos));
+    }
+  }
+
+  Future<void> _openLocationPicker() async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(builder: (_) => const LocationPickerScreen()),
+    );
+    if (result != null) {
+      setState(() {
+        _address = result['address'];
+        _latitude = result['lat']?.toDouble();
+        _longitude = result['lng']?.toDouble();
+      });
+    }
+  }
+
+  Future<void> _submitJob() async {
+    String? catId = _selectedCategoryId;
+    if (catId == null && _selectedCategory != null) {
+      // Retry loading categories if we don't have them yet
+      if (_apiCategories.isEmpty) {
+        try {
+          _apiCategories = await ApiService().getCategories();
+        } catch (_) {}
+      }
+      final match = _apiCategories.where((c) =>
+        (c['name'] as String).toLowerCase() == _selectedCategory!.toLowerCase());
+      if (match.isNotEmpty) catId = match.first['id'];
+    }
+    if (catId == null) {
+      _showError('Category not available. Check your internet connection and try again.');
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    try {
+      final budgetMin = double.tryParse(_budgetMinController.text);
+      final budgetMax = double.tryParse(_budgetMaxController.text);
+
+      DateTime? scheduledAt;
+      if (_preferredDate != null) {
+        final time = _preferredTime ?? const TimeOfDay(hour: 9, minute: 0);
+        scheduledAt = DateTime(
+          _preferredDate!.year, _preferredDate!.month, _preferredDate!.day,
+          time.hour, time.minute,
+        );
+      }
+
+      await ApiService().createJob(
+        title: _titleController.text.trim(),
+        description: _descController.text.trim(),
+        categoryId: catId,
+        price: budgetMax ?? budgetMin,
+        latitude: _latitude,
+        longitude: _longitude,
+        address: _address,
+        scheduledAt: scheduledAt?.toUtc().toIso8601String(),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Job posted successfully!'), backgroundColor: AppColors.success));
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) _showError(ApiService.errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   @override
@@ -72,7 +232,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
       ),
       body: Column(
         children: [
-          // ── Progress bar ──
+          // Progress bar
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: Column(
@@ -82,12 +242,9 @@ class _PostJobScreenState extends State<PostJobScreen> {
                     return Expanded(
                       child: Container(
                         height: 3,
-                        margin: EdgeInsets.only(
-                            right: i < _steps.length - 1 ? 4 : 0),
+                        margin: EdgeInsets.only(right: i < _steps.length - 1 ? 4 : 0),
                         decoration: BoxDecoration(
-                          color: i <= _step
-                              ? AppColors.primary
-                              : AppColors.border,
+                          color: i <= _step ? AppColors.primary : AppColors.border,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -98,18 +255,14 @@ class _PostJobScreenState extends State<PostJobScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Step ${_step + 1} of ${_steps.length}',
-                        style: AppTypography.labelSmall),
-                    Text(_steps[_step],
-                        style: AppTypography.labelMedium
-                            .copyWith(color: AppColors.primary)),
+                    Text('Step ${_step + 1} of ${_steps.length}', style: AppTypography.labelSmall),
+                    Text(_steps[_step], style: AppTypography.labelMedium.copyWith(color: AppColors.primary)),
                   ],
                 ),
               ],
             ),
           ),
 
-          // ── Step content ──
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
@@ -117,7 +270,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
             ),
           ),
 
-          // ── Bottom buttons ──
+          // Bottom buttons
           Container(
             padding: const EdgeInsets.all(20),
             decoration: const BoxDecoration(
@@ -137,45 +290,13 @@ class _PostJobScreenState extends State<PostJobScreen> {
                 if (_step > 0) const SizedBox(width: 12),
                 Expanded(
                   child: DoerButton(
-                    label:
-                        _step == _steps.length - 1 ? 'Post Job' : 'Continue',
+                    label: _step == _steps.length - 1 ? 'Post Job' : 'Continue',
                     isLoading: _isSubmitting,
                     onPressed: () async {
                       if (_step < _steps.length - 1) {
-                        setState(() => _step++);
+                        if (_validateStep()) setState(() => _step++);
                       } else {
-                        // Find category ID from API categories
-                        String? catId = _selectedCategoryId;
-                        if (catId == null && _selectedCategory != null) {
-                          final match = _apiCategories.where((c) =>
-                            (c['name'] as String).toLowerCase() == _selectedCategory!.toLowerCase());
-                          if (match.isNotEmpty) catId = match.first['id'];
-                        }
-                        if (catId == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Please select a category')));
-                          return;
-                        }
-                        setState(() => _isSubmitting = true);
-                        try {
-                          final budgetMax = double.tryParse(_budgetMaxController.text) ??
-                              double.tryParse(_budgetMinController.text);
-                          await ApiService().createJob(
-                            title: _titleController.text.trim(),
-                            description: _descController.text.trim(),
-                            categoryId: catId,
-                            price: budgetMax,
-                            scheduledAt: _preferredDate?.toIso8601String(),
-                          );
-                          if (mounted) Navigator.pop(context);
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(ApiService.errorMessage(e))));
-                          }
-                        } finally {
-                          if (mounted) setState(() => _isSubmitting = false);
-                        }
+                        await _submitJob();
                       }
                     },
                   ),
@@ -188,25 +309,18 @@ class _PostJobScreenState extends State<PostJobScreen> {
     );
   }
 
-  // Routes to the correct step widget
   Widget _buildStep() {
     switch (_step) {
-      case 0:
-        return _buildCategoryStep();
-      case 1:
-        return _buildDetailsStep();
-      case 2:
-        return _buildBudgetStep();
-      case 3:
-        return _buildPhotosStep();
-      case 4:
-        return _buildReviewStep();
-      default:
-        return const SizedBox();
+      case 0: return _buildCategoryStep();
+      case 1: return _buildDetailsStep();
+      case 2: return _buildBudgetStep();
+      case 3: return _buildPhotosStep();
+      case 4: return _buildReviewStep();
+      default: return const SizedBox();
     }
   }
 
-  // ── Step 1: Pick category ──
+  // ── Step 1: Category ──
   Widget _buildCategoryStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,15 +328,20 @@ class _PostJobScreenState extends State<PostJobScreen> {
         Text('What service do you need?', style: AppTypography.displaySmall),
         const SizedBox(height: 8),
         Text('Choose the category that best matches your job.',
-            style: AppTypography.bodyMedium
-                .copyWith(color: AppColors.textSecondary)),
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
         const SizedBox(height: 24),
         ...AppCategories.all.map((cat) {
-          final selected = _selectedCategory == cat.id;
+          final selected = _selectedCategory == cat.name;
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: GestureDetector(
-              onTap: () => setState(() => _selectedCategory = cat.id),
+              onTap: () {
+                setState(() => _selectedCategory = cat.name);
+                // Try to match API category ID
+                final match = _apiCategories.where((c) =>
+                  (c['name'] as String).toLowerCase() == cat.name.toLowerCase());
+                if (match.isNotEmpty) _selectedCategoryId = match.first['id'];
+              },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.all(16),
@@ -238,12 +357,9 @@ class _PostJobScreenState extends State<PostJobScreen> {
                   children: [
                     Text(cat.icon, style: const TextStyle(fontSize: 28)),
                     const SizedBox(width: 14),
-                    Expanded(
-                        child: Text(cat.name,
-                            style: AppTypography.headlineMedium)),
+                    Expanded(child: Text(cat.name, style: AppTypography.headlineMedium)),
                     if (selected)
-                      const Icon(Icons.check_circle_rounded,
-                          color: AppColors.primary, size: 22),
+                      const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 22),
                   ],
                 ),
               ),
@@ -254,7 +370,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
     );
   }
 
-  // ── Step 2: Job details ──
+  // ── Step 2: Details + Location ──
   Widget _buildDetailsStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -262,19 +378,17 @@ class _PostJobScreenState extends State<PostJobScreen> {
         Text('Describe your job', style: AppTypography.displaySmall),
         const SizedBox(height: 8),
         Text('Provide details to help workers understand the job.',
-            style: AppTypography.bodyMedium
-                .copyWith(color: AppColors.textSecondary)),
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
         const SizedBox(height: 24),
-        Text('Job Title', style: AppTypography.labelMedium),
+        Text('Job Title *', style: AppTypography.labelMedium),
         const SizedBox(height: 8),
         TextField(
           controller: _titleController,
           style: AppTypography.bodyMedium,
-          decoration:
-              const InputDecoration(hintText: 'e.g. Fix kitchen sink leak'),
+          decoration: const InputDecoration(hintText: 'e.g. Fix kitchen sink leak'),
         ),
         const SizedBox(height: 20),
-        Text('Description', style: AppTypography.labelMedium),
+        Text('Description *', style: AppTypography.labelMedium),
         const SizedBox(height: 8),
         TextField(
           controller: _descController,
@@ -286,45 +400,49 @@ class _PostJobScreenState extends State<PostJobScreen> {
           ),
         ),
         const SizedBox(height: 20),
-        Text('Location', style: AppTypography.labelMedium),
+        Text('Location *', style: AppTypography.labelMedium),
         const SizedBox(height: 8),
         GestureDetector(
-          onTap: () {
-            // TODO: Open Google Maps picker
-          },
+          onTap: _openLocationPicker,
           child: Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: _address != null ? AppColors.primary : AppColors.border),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 36,
-                  height: 36,
+                  width: 36, height: 36,
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.location_on_rounded,
-                      color: AppColors.primary, size: 20),
+                  child: const Icon(Icons.location_on_rounded, color: AppColors.primary, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Use current location',
-                          style: AppTypography.headlineSmall),
-                      Text('Colombo 03, Western Province',
-                          style: AppTypography.bodySmall),
+                      Text(
+                        _address != null ? 'Location selected' : 'Select location',
+                        style: AppTypography.headlineSmall,
+                      ),
+                      Text(
+                        _address ?? 'Tap to search for an address',
+                        style: AppTypography.bodySmall,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded,
-                    color: AppColors.textTertiary),
+                Icon(
+                  _address != null ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
+                  color: _address != null ? AppColors.success : AppColors.textTertiary,
+                ),
               ],
             ),
           ),
@@ -333,7 +451,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
     );
   }
 
-  // ── Step 3: Budget & schedule ──
+  // ── Step 3: Budget & Schedule ──
   Widget _buildBudgetStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -341,10 +459,9 @@ class _PostJobScreenState extends State<PostJobScreen> {
         Text('Budget & Schedule', style: AppTypography.displaySmall),
         const SizedBox(height: 8),
         Text('Set your budget range and preferred time.',
-            style: AppTypography.bodyMedium
-                .copyWith(color: AppColors.textSecondary)),
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
         const SizedBox(height: 24),
-        Text('Budget Range (LKR)', style: AppTypography.labelMedium),
+        Text('Budget Range (LKR) *', style: AppTypography.labelMedium),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -358,8 +475,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
             ),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 12),
-              child:
-                  Text('—', style: TextStyle(color: AppColors.textTertiary)),
+              child: Text('—', style: TextStyle(color: AppColors.textTertiary)),
             ),
             Expanded(
               child: TextField(
@@ -376,24 +492,19 @@ class _PostJobScreenState extends State<PostJobScreen> {
         const SizedBox(height: 10),
         Row(
           children: [
-            _UrgencyChip(
-                label: 'Low',
-                icon: Icons.schedule_outlined,
-                selected: _urgency == 'low',
-                onTap: () => setState(() => _urgency = 'low')),
+            _UrgencyChip(label: 'Low', icon: Icons.schedule_outlined,
+                selected: _urgency == 'LOW', onTap: () => setState(() => _urgency = 'LOW')),
             const SizedBox(width: 8),
-            _UrgencyChip(
-                label: 'Normal',
-                icon: Icons.access_time_rounded,
-                selected: _urgency == 'normal',
-                onTap: () => setState(() => _urgency = 'normal')),
+            _UrgencyChip(label: 'Normal', icon: Icons.access_time_rounded,
+                selected: _urgency == 'NORMAL', onTap: () => setState(() => _urgency = 'NORMAL')),
             const SizedBox(width: 8),
-            _UrgencyChip(
-                label: 'Urgent',
-                icon: Icons.bolt_rounded,
-                selected: _urgency == 'urgent',
-                color: AppColors.error,
-                onTap: () => setState(() => _urgency = 'urgent')),
+            _UrgencyChip(label: 'Urgent', icon: Icons.bolt_rounded,
+                selected: _urgency == 'URGENT', color: AppColors.warning,
+                onTap: () => setState(() => _urgency = 'URGENT')),
+            const SizedBox(width: 8),
+            _UrgencyChip(label: 'Emergency', icon: Icons.emergency_rounded,
+                selected: _urgency == 'EMERGENCY', color: AppColors.error,
+                onTap: () => setState(() => _urgency = 'EMERGENCY')),
           ],
         ),
         const SizedBox(height: 24),
@@ -409,30 +520,12 @@ class _PostJobScreenState extends State<PostJobScreen> {
             );
             if (date != null) setState(() => _preferredDate = date);
           },
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.calendar_today_outlined,
-                    size: 18, color: AppColors.textTertiary),
-                const SizedBox(width: 12),
-                Text(
-                  _preferredDate != null
-                      ? '${_preferredDate!.day}/${_preferredDate!.month}/${_preferredDate!.year}'
-                      : 'Select a date',
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: _preferredDate != null
-                        ? AppColors.textPrimary
-                        : AppColors.textTertiary,
-                  ),
-                ),
-              ],
-            ),
+          child: _buildDateTimeBox(
+            Icons.calendar_today_outlined,
+            _preferredDate != null
+                ? '${_preferredDate!.day}/${_preferredDate!.month}/${_preferredDate!.year}'
+                : 'Select a date',
+            _preferredDate != null,
           ),
         ),
         const SizedBox(height: 16),
@@ -440,39 +533,35 @@ class _PostJobScreenState extends State<PostJobScreen> {
         const SizedBox(height: 8),
         GestureDetector(
           onTap: () async {
-            final time = await showTimePicker(
-              context: context,
-              initialTime: TimeOfDay.now(),
-            );
+            final time = await showTimePicker(context: context, initialTime: TimeOfDay.now());
             if (time != null) setState(() => _preferredTime = time);
           },
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.access_time_rounded,
-                    size: 18, color: AppColors.textTertiary),
-                const SizedBox(width: 12),
-                Text(
-                  _preferredTime != null
-                      ? _preferredTime!.format(context)
-                      : 'Select a time',
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: _preferredTime != null
-                        ? AppColors.textPrimary
-                        : AppColors.textTertiary,
-                  ),
-                ),
-              ],
-            ),
+          child: _buildDateTimeBox(
+            Icons.access_time_rounded,
+            _preferredTime != null ? _preferredTime!.format(context) : 'Select a time',
+            _preferredTime != null,
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildDateTimeBox(IconData icon, String text, bool hasValue) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.textTertiary),
+          const SizedBox(width: 12),
+          Text(text, style: AppTypography.bodyMedium.copyWith(
+            color: hasValue ? AppColors.textPrimary : AppColors.textTertiary)),
+        ],
+      ),
     );
   }
 
@@ -483,18 +572,54 @@ class _PostJobScreenState extends State<PostJobScreen> {
       children: [
         Text('Add reference photos', style: AppTypography.displaySmall),
         const SizedBox(height: 8),
-        Text(
-            'Upload photos to help workers understand the job better. This reduces pricing disputes.',
-            style: AppTypography.bodyMedium
-                .copyWith(color: AppColors.textSecondary)),
+        Text('Upload photos to help workers understand the job better.',
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
         const SizedBox(height: 24),
+
+        // Photo grid
+        if (_photos.isNotEmpty) ...[
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8),
+            itemCount: _photos.length,
+            itemBuilder: (context, index) {
+              return Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.file(
+                      File(_photos[index].path),
+                      width: double.infinity, height: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Positioned(
+                    top: 4, right: 4,
+                    child: GestureDetector(
+                      onTap: () => setState(() => _photos.removeAt(index)),
+                      child: Container(
+                        width: 24, height: 24,
+                        decoration: const BoxDecoration(
+                          color: Colors.black54, shape: BoxShape.circle),
+                        child: const Icon(Icons.close, color: Colors.white, size: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+        ],
+
+        // Upload button
         GestureDetector(
-          onTap: () {
-            // TODO: Open image picker
-          },
+          onTap: _pickPhotos,
           child: Container(
             width: double.infinity,
-            height: 160,
+            height: _photos.isEmpty ? 160 : 80,
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(16),
@@ -503,45 +628,43 @@ class _PostJobScreenState extends State<PostJobScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(16),
+                if (_photos.isEmpty) ...[
+                  Container(
+                    width: 52, height: 52,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(16)),
+                    child: const Icon(Icons.camera_alt_outlined, color: AppColors.primary, size: 24),
                   ),
-                  child: const Icon(Icons.camera_alt_outlined,
-                      color: AppColors.primary, size: 24),
-                ),
-                const SizedBox(height: 12),
-                Text('Tap to upload photos',
+                  const SizedBox(height: 12),
+                ],
+                Text(_photos.isEmpty ? 'Tap to upload photos' : 'Add more photos',
                     style: AppTypography.headlineSmall),
-                const SizedBox(height: 4),
-                Text('JPEG or PNG, max 5MB each',
-                    style: AppTypography.bodySmall),
+                if (_photos.isEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text('JPEG or PNG, max 5MB each', style: AppTypography.bodySmall),
+                ],
               ],
             ),
           ),
         ),
+        const SizedBox(height: 16),
+        Text('${_photos.length} photo${_photos.length == 1 ? '' : 's'} selected',
+            style: AppTypography.labelSmall),
+
         const SizedBox(height: 24),
-        // Info tip
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppColors.infoLight,
-            borderRadius: BorderRadius.circular(12),
-          ),
+            color: AppColors.infoLight, borderRadius: BorderRadius.circular(12)),
           child: Row(
             children: [
-              const Icon(Icons.info_outline_rounded,
-                  color: AppColors.info, size: 20),
+              const Icon(Icons.info_outline_rounded, color: AppColors.info, size: 20),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   'Photos help workers estimate the job accurately and avoid pricing disputes.',
-                  style:
-                      AppTypography.bodySmall.copyWith(color: AppColors.info),
-                ),
+                  style: AppTypography.bodySmall.copyWith(color: AppColors.info)),
               ),
             ],
           ),
@@ -553,7 +676,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
   // ── Step 5: Review ──
   Widget _buildReviewStep() {
     final category = AppCategories.all.firstWhere(
-      (c) => c.id == _selectedCategory,
+      (c) => c.name == _selectedCategory,
       orElse: () => AppCategories.all.first,
     );
 
@@ -563,8 +686,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
         Text('Review your job', style: AppTypography.displaySmall),
         const SizedBox(height: 8),
         Text('Make sure everything looks correct before posting.',
-            style: AppTypography.bodyMedium
-                .copyWith(color: AppColors.textSecondary)),
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
         const SizedBox(height: 24),
         Container(
           padding: const EdgeInsets.all(20),
@@ -576,33 +698,22 @@ class _PostJobScreenState extends State<PostJobScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Category + title header
               Row(
                 children: [
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: 44, height: 44,
                     decoration: BoxDecoration(
-                      color: category.iconBgColor,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Center(
-                        child: Text(category.icon,
-                            style: const TextStyle(fontSize: 22))),
+                      color: category.iconBgColor, borderRadius: BorderRadius.circular(14)),
+                    child: Center(child: Text(category.icon, style: const TextStyle(fontSize: 22))),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(category.name,
-                            style: AppTypography.labelMedium),
-                        Text(
-                          _titleController.text.isEmpty
-                              ? 'No title'
-                              : _titleController.text,
-                          style: AppTypography.headlineMedium,
-                        ),
+                        Text(category.name, style: AppTypography.labelMedium),
+                        Text(_titleController.text.isEmpty ? 'No title' : _titleController.text,
+                            style: AppTypography.headlineMedium),
                       ],
                     ),
                   ),
@@ -611,31 +722,31 @@ class _PostJobScreenState extends State<PostJobScreen> {
               const SizedBox(height: 16),
               const Divider(color: AppColors.borderLight),
               const SizedBox(height: 16),
-              // Summary rows
-              _ReviewRow(
-                  icon: Icons.description_outlined,
-                  label: 'Description',
-                  value: _descController.text.isEmpty
-                      ? 'No description'
-                      : _descController.text),
+              _ReviewRow(icon: Icons.description_outlined, label: 'Description',
+                  value: _descController.text.isEmpty ? 'No description' : _descController.text),
               const SizedBox(height: 14),
-              _ReviewRow(
-                  icon: Icons.account_balance_wallet_outlined,
-                  label: 'Budget',
-                  value:
-                      'Rs. ${_budgetMinController.text.isEmpty ? '0' : _budgetMinController.text} — Rs. ${_budgetMaxController.text.isEmpty ? '0' : _budgetMaxController.text}'),
+              _ReviewRow(icon: Icons.location_on_outlined, label: 'Location',
+                  value: _address ?? 'Not set'),
               const SizedBox(height: 14),
-              _ReviewRow(
-                  icon: Icons.bolt_rounded,
-                  label: 'Urgency',
-                  value: _urgency[0].toUpperCase() + _urgency.substring(1)),
+              _ReviewRow(icon: Icons.account_balance_wallet_outlined, label: 'Budget',
+                  value: 'Rs. ${_budgetMinController.text.isEmpty ? '0' : _budgetMinController.text} — Rs. ${_budgetMaxController.text.isEmpty ? '0' : _budgetMaxController.text}'),
               const SizedBox(height: 14),
-              _ReviewRow(
-                  icon: Icons.calendar_today_outlined,
-                  label: 'Date',
+              _ReviewRow(icon: Icons.bolt_rounded, label: 'Urgency', value: _urgency),
+              const SizedBox(height: 14),
+              _ReviewRow(icon: Icons.calendar_today_outlined, label: 'Date',
                   value: _preferredDate != null
                       ? '${_preferredDate!.day}/${_preferredDate!.month}/${_preferredDate!.year}'
                       : 'Not set'),
+              if (_preferredTime != null) ...[
+                const SizedBox(height: 14),
+                _ReviewRow(icon: Icons.access_time_rounded, label: 'Time',
+                    value: _preferredTime!.format(context)),
+              ],
+              if (_photos.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                _ReviewRow(icon: Icons.photo_outlined, label: 'Photos',
+                    value: '${_photos.length} photo${_photos.length == 1 ? '' : 's'} attached'),
+              ],
             ],
           ),
         ),
@@ -644,21 +755,13 @@ class _PostJobScreenState extends State<PostJobScreen> {
   }
 }
 
-// ── Urgency selector chip ──
 class _UrgencyChip extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool selected;
   final Color? color;
   final VoidCallback onTap;
-
-  const _UrgencyChip({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    this.color,
-    required this.onTap,
-  });
+  const _UrgencyChip({required this.label, required this.icon, required this.selected, this.color, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -672,22 +775,17 @@ class _UrgencyChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected ? c.withValues(alpha: 0.1) : AppColors.surface,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected ? c : AppColors.border,
-              width: selected ? 1.5 : 1,
-            ),
+            border: Border.all(color: selected ? c : AppColors.border, width: selected ? 1.5 : 1),
           ),
           child: Column(
             children: [
-              Icon(icon,
-                  size: 20,
-                  color: selected ? c : AppColors.textTertiary),
+              Icon(icon, size: 20, color: selected ? c : AppColors.textTertiary),
               const SizedBox(height: 6),
-              Text(label,
-                  style: AppTypography.labelMedium.copyWith(
-                    color: selected ? c : AppColors.textSecondary,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                  )),
+              Text(label, style: AppTypography.labelSmall.copyWith(
+                color: selected ? c : AppColors.textSecondary,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                fontSize: 10,
+              )),
             ],
           ),
         ),
@@ -696,17 +794,11 @@ class _UrgencyChip extends StatelessWidget {
   }
 }
 
-// ── Review summary row ──
 class _ReviewRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-
-  const _ReviewRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+  const _ReviewRow({required this.icon, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -715,14 +807,9 @@ class _ReviewRow extends StatelessWidget {
       children: [
         Icon(icon, size: 16, color: AppColors.textTertiary),
         const SizedBox(width: 10),
-        SizedBox(
-            width: 80,
-            child: Text(label, style: AppTypography.labelSmall)),
-        Expanded(
-          child: Text(value,
-              style: AppTypography.bodySmall
-                  .copyWith(color: AppColors.textPrimary)),
-        ),
+        SizedBox(width: 80, child: Text(label, style: AppTypography.labelSmall)),
+        Expanded(child: Text(value,
+            style: AppTypography.bodySmall.copyWith(color: AppColors.textPrimary))),
       ],
     );
   }

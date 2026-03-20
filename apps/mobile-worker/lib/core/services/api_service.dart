@@ -28,7 +28,10 @@ class ApiService {
   }
 
   // TODO: Update this to your Render URL in production
-  static const _baseUrl = 'http://10.0.2.2:3000/api'; // Android emulator → localhost
+  static const _baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://10.0.2.2:3000/api',
+  );
   late final Dio _dio;
   String? _jwt;
 
@@ -245,6 +248,54 @@ class ApiService {
   Future<List<dynamic>> getMyPayments() async {
     final resp = await _dio.get('/payments');
     return resp.data['payments'] as List;
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // APPLICATIONS
+  // ════════════════════════════════════════════════════════════
+
+  Future<Map<String, dynamic>> applyToJob(String jobId, {String? message, double? price}) async {
+    final resp = await _dio.post('/applications/$jobId', data: {
+      if (message != null) 'message': message,
+      if (price != null) 'price': price,
+    });
+    return resp.data;
+  }
+
+  Future<List<dynamic>> getMyApplications() async {
+    final resp = await _dio.get('/applications/my');
+    return resp.data['applications'] as List;
+  }
+
+  Future<Map<String, dynamic>> withdrawApplication(String id) async {
+    final resp = await _dio.delete('/applications/$id/withdraw');
+    return resp.data;
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // MAPS
+  // ════════════════════════════════════════════════════════════
+
+  Future<List<dynamic>> placesAutocomplete(String input) async {
+    final resp = await _dio.get('/maps/autocomplete', queryParameters: {'input': input});
+    return resp.data['predictions'] as List;
+  }
+
+  Future<Map<String, dynamic>> getPlaceDetails(String placeId) async {
+    final resp = await _dio.get('/maps/place-details', queryParameters: {'placeId': placeId});
+    return resp.data;
+  }
+
+  Future<Map<String, dynamic>> getDistance(double oLat, double oLng, double dLat, double dLng) async {
+    final resp = await _dio.get('/maps/distance', queryParameters: {
+      'originLat': oLat, 'originLng': oLng, 'destLat': dLat, 'destLng': dLng,
+    });
+    return resp.data;
+  }
+
+  Future<Map<String, dynamic>> reverseGeocode(double lat, double lng) async {
+    final resp = await _dio.get('/maps/reverse-geocode', queryParameters: {'lat': lat, 'lng': lng});
+    return resp.data;
   }
 
   // ════════════════════════════════════════════════════════════

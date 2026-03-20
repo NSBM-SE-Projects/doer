@@ -53,14 +53,24 @@ class AuthService {
         password: password,
       );
 
-      // Login with backend to get JWT
+      // Login with backend to get JWT. If user doesn't exist yet, register first.
       try {
         final idToken = await credential.user?.getIdToken() ?? '';
-        await ApiService().login(
-          firebaseToken: idToken,
-          firebaseUid: credential.user?.uid ?? '',
-        );
-      } catch (_) {}
+        final uid = credential.user?.uid ?? '';
+        try {
+          await ApiService().login(firebaseToken: idToken, firebaseUid: uid);
+        } catch (_) {
+          // Login failed — user might not be registered with backend yet
+          await ApiService().register(
+            firebaseToken: idToken,
+            firebaseUid: uid,
+            email: email,
+            name: credential.user?.displayName ?? email.split('@').first,
+          );
+        }
+      } catch (e) {
+        print('Backend auth failed: $e');
+      }
 
       return credential.user;
     } on FirebaseAuthException catch (e) {

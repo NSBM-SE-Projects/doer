@@ -53,6 +53,20 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  String _mapStatus(String? s) {
+    switch (s?.toUpperCase()) {
+      case 'OPEN': return JobStatus.posted;
+      case 'APPLICATIONS_RECEIVED': return JobStatus.applicationsReceived;
+      case 'ASSIGNED': return JobStatus.workerAccepted;
+      case 'IN_PROGRESS': return JobStatus.inProgress;
+      case 'COMPLETED': return JobStatus.completed;
+      case 'REVIEWING': return JobStatus.reviewed;
+      case 'CLOSED': return JobStatus.closed;
+      case 'CANCELLED': return JobStatus.cancelled;
+      default: return JobStatus.posted;
+    }
+  }
+
   String _getCategoryIcon(String? name) {
     final cat = AppCategories.all.where((c) => c.name.toLowerCase() == (name ?? '').toLowerCase());
     return cat.isNotEmpty ? cat.first.icon : '🔧';
@@ -234,7 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   title: job['title'] ?? '',
                                   category: catName,
                                   categoryIcon: _getCategoryIcon(catName),
-                                  status: job['status'] ?? 'OPEN',
+                                  status: _mapStatus(job['status']),
                                   budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : 'TBD',
                                   date: _timeAgo(job['createdAt']),
                                   workerName: workerUser != null ? workerUser['name'] ?? '' : '',

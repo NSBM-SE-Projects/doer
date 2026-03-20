@@ -5,6 +5,7 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/AppError';
 import { createNotification } from './notifications';
+import { geocode } from '../config/maps';
 
 const router = Router();
 
@@ -13,20 +14,28 @@ const createJobSchema = z.object({
   description: z.string().min(1),
   categoryId: z.string(),
   price: z.number().positive().optional(),
+  budgetMin: z.number().positive().optional(),
+  budgetMax: z.number().positive().optional(),
+  urgency: z.enum(['LOW', 'NORMAL', 'URGENT', 'EMERGENCY']).optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
   address: z.string().optional(),
   scheduledAt: z.string().datetime().optional(),
+  scheduledEnd: z.string().datetime().optional(),
 });
 
 const updateJobSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().min(1).optional(),
   price: z.number().positive().optional(),
+  budgetMin: z.number().positive().optional(),
+  budgetMax: z.number().positive().optional(),
+  urgency: z.enum(['LOW', 'NORMAL', 'URGENT', 'EMERGENCY']).optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
   address: z.string().optional(),
   scheduledAt: z.string().datetime().optional(),
+  scheduledEnd: z.string().datetime().optional(),
 });
 
 // POST /api/jobs — create a job (customer only)
@@ -48,15 +57,31 @@ router.post(
     });
     if (!category) throw AppError.badRequest('Invalid category');
 
+    // Auto-geocode address if provided without coordinates
+    let { latitude, longitude } = body;
+    if (body.address && !latitude && !longitude) {
+      try {
+        const geo = await geocode(body.address);
+        if (geo) {
+          latitude = geo.lat;
+          longitude = geo.lng;
+        }
+      } catch (_) {}
+    }
+
     const job = await prisma.job.create({
       data: {
         title: body.title,
         description: body.description,
         price: body.price,
-        latitude: body.latitude,
-        longitude: body.longitude,
+        budgetMin: body.budgetMin,
+        budgetMax: body.budgetMax,
+        urgency: body.urgency || 'NORMAL',
+        latitude,
+        longitude,
         address: body.address,
         scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : undefined,
+        scheduledEnd: body.scheduledEnd ? new Date(body.scheduledEnd) : undefined,
         customerId: customerProfile.id,
         categoryId: body.categoryId,
       },
@@ -395,7 +420,38 @@ router.post(
       data: { rating: avgResult._avg.rating || 0 },
     });
 
+    // Move job to REVIEWING status
+    await prisma.job.update({
+      where: { id: req.params.id as string },
+      data: { status: 'REVIEWING' },
+    });
+
     res.status(201).json({ review });
+  })
+);
+
+// PATCH /api/jobs/:id/close — close a reviewed job (customer)
+router.patch(
+  '/:id/close',
+  authenticate,
+  authorize('CUSTOMER'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const job = await prisma.job.findUnique({
+      where: { id: req.params.id as string },
+      include: { customer: true },
+    });
+    if (!job) throw AppError.notFound('Job not found');
+    if (job.customer.userId !== req.user!.userId) throw AppError.forbidden('Not your job');
+    if (job.status !== 'REVIEWING' && job.status !== 'COMPLETED') {
+      throw AppError.badRequest('Job must be completed or reviewed first');
+    }
+
+    const updated = await prisma.job.update({
+      where: { id: req.params.id as string },
+      data: { status: 'CLOSED' },
+    });
+
+    res.json({ job: updated });
   })
 );
 

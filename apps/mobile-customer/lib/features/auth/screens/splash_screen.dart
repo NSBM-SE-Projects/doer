@@ -1,6 +1,9 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/api_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // SPLASH SCREEN (with Firebase Auth check)
@@ -38,17 +41,45 @@ class _SplashScreenState extends State<SplashScreen>
     _controller.forward();
 
     // After 2 seconds, check auth state and navigate
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        if (_authService.currentUser != null) {
-          // User is logged in → go to home
-          Navigator.pushReplacementNamed(context, '/');
-        } else {
-          // Not logged in → go to onboarding
-          Navigator.pushReplacementNamed(context, '/onboarding');
-        }
+    Future.delayed(const Duration(seconds: 2), () async {
+      if (!mounted) return;
+      final user = _authService.currentUser;
+      if (user != null) {
+        // Ensure user is registered with backend
+        await _ensureBackendAuth(user);
+        if (mounted) Navigator.pushReplacementNamed(context, '/');
+      } else {
+        if (mounted) Navigator.pushReplacementNamed(context, '/onboarding');
       }
     });
+  }
+
+  Future<void> _ensureBackendAuth(User user) async {
+    final uid = user.uid;
+    final email = user.email ?? '';
+    final name = user.displayName ?? email.split('@').first;
+
+    // Try login first
+    try {
+      await ApiService().login(firebaseToken: uid, firebaseUid: uid);
+      print('Backend login OK');
+      return;
+    } catch (e) {
+      print('Backend login failed: ${e is DioException ? '${e.response?.statusCode} ${e.response?.data}' : e}');
+    }
+
+    // Login failed — try register
+    try {
+      await ApiService().register(
+        firebaseToken: uid,
+        firebaseUid: uid,
+        email: email,
+        name: name,
+      );
+      print('Backend register OK');
+    } catch (e) {
+      print('Backend register failed: ${e is DioException ? '${e.response?.statusCode} ${e.response?.data}' : e}');
+    }
   }
 
   @override

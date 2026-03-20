@@ -149,14 +149,20 @@ class AuthService {
           uid: uid, email: email, displayName: displayName, idToken: idToken);
       await _saveSession(uid, email, displayName, idToken, refreshToken);
 
-      // Login with backend to get JWT
+      // Login with backend to get JWT. If not registered, register first.
       try {
-        await ApiService().login(
-          firebaseToken: idToken,
-          firebaseUid: uid,
-        );
-      } catch (_) {
-        // If backend login fails, user can still use the app with limited features
+        try {
+          await ApiService().login(firebaseToken: idToken, firebaseUid: uid);
+        } catch (_) {
+          await ApiService().register(
+            firebaseToken: idToken,
+            firebaseUid: uid,
+            email: email,
+            name: displayName ?? email.split('@').first,
+          );
+        }
+      } catch (e) {
+        print('Backend auth failed: $e');
       }
 
       return _currentUser;
