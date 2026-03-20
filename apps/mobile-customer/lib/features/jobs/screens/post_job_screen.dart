@@ -48,10 +48,8 @@ class _PostJobScreenState extends State<PostJobScreen> {
   Future<void> _loadCategories() async {
     try {
       _apiCategories = await ApiService().getCategories();
-      print('Loaded ${_apiCategories.length} categories from API');
       if (mounted) setState(() {});
-    } catch (e) {
-      print('Failed to load categories: $e');
+    } catch (_) {
     }
   }
 

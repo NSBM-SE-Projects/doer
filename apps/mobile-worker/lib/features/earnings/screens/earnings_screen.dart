@@ -93,11 +93,11 @@ class _EarningsScreenState extends State<EarningsScreen> {
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Text('Monthly Subscription', style: AppTypography.headlineSmall),
-                          Text('Active · Renews Apr 1, 2026',
-                            style: AppTypography.bodySmall.copyWith(color: AppColors.success)),
+                          Text('Not subscribed',
+                            style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary)),
                         ]),
                       ),
-                      Text('Rs. 990/mo', style: AppTypography.headlineSmall.copyWith(color: AppColors.primary)),
+                      Text('Free', style: AppTypography.headlineSmall.copyWith(color: AppColors.primary)),
                     ]),
                   ),
                 ),

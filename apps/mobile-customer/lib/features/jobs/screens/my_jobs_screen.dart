@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/services/api_service.dart';
+import '../../messaging/screens/messaging_screens.dart';
 
 // ──────────────────────────────────────────────────────────────
 // MY JOBS SCREEN
@@ -38,7 +40,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
       final data = await ApiService().getMyJobs();
       final jobs = data['jobs'] as List;
       setState(() {
-        _activeJobs = jobs.where((j) => j['status'] == 'OPEN' || j['status'] == 'ASSIGNED' || j['status'] == 'IN_PROGRESS').toList();
+        _activeJobs = jobs.where((j) => j['status'] == 'OPEN' || j['status'] == 'APPLICATIONS_RECEIVED' || j['status'] == 'ASSIGNED' || j['status'] == 'IN_PROGRESS').toList();
         _completedJobs = jobs.where((j) => j['status'] == 'COMPLETED').toList();
         _cancelledJobs = jobs.where((j) => j['status'] == 'CANCELLED').toList();
         _isLoading = false;
@@ -140,7 +142,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
             date: _timeAgo(job['createdAt']),
             workerName: workerUser?['name'] ?? '',
             onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const JobDetailScreen()));
+              Navigator.push(context, MaterialPageRoute(builder: (_) => JobDetailScreen(jobId: job['id'])));
             },
           );
         },
@@ -164,14 +166,282 @@ class _MyJobsScreenState extends State<MyJobsScreen>
 // JOB DETAIL SCREEN
 // Full view of a single job. Sections:
 //   1. Header: category icon + title + status pill
-//   2. Timeline: visual progress (Posted → Matched → In Progress → Done)
+//   2. Timeline: visual progress (Posted -> Matched -> In Progress -> Done)
 //   3. Worker card: assigned worker with chat/call buttons
 //   4. Job details: description, budget, date, location, urgency
 //   5. Payment info: agreed price + escrow status
 //   6. Bottom bar: Cancel Job / Release Payment buttons
 // ──────────────────────────────────────────────────────────────
-class JobDetailScreen extends StatelessWidget {
-  const JobDetailScreen({super.key});
+class JobDetailScreen extends StatefulWidget {
+  final String jobId;
+  const JobDetailScreen({super.key, required this.jobId});
+
+  @override
+  State<JobDetailScreen> createState() => _JobDetailScreenState();
+}
+
+class _JobDetailScreenState extends State<JobDetailScreen> {
+  bool _isLoading = true;
+  bool _actionLoading = false;
+  Map<String, dynamic>? _job;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchJob();
+  }
+
+  Future<void> _fetchJob() async {
+    setState(() { _isLoading = true; _error = null; });
+    try {
+      final data = await ApiService().getJob(widget.jobId);
+      setState(() { _job = data; _isLoading = false; });
+    } catch (e) {
+      setState(() { _error = 'Failed to load job details'; _isLoading = false; });
+    }
+  }
+
+  String _getCategoryIcon(String? name) {
+    final cat = AppCategories.all.where((c) => c.name.toLowerCase() == (name ?? '').toLowerCase());
+    return cat.isNotEmpty ? cat.first.icon : '🔧';
+  }
+
+  Color _getCategoryColor(String? name) {
+    switch (name?.toLowerCase()) {
+      case 'plumbing': return AppColors.categoryPlumbing;
+      case 'electrical': return AppColors.categoryElectrical;
+      case 'cleaning': return AppColors.categoryCleaning;
+      case 'painting': return AppColors.categoryPainting;
+      case 'gardening': return AppColors.categoryGardening;
+      case 'moving': return AppColors.categoryMoving;
+      default: return AppColors.categoryPlumbing;
+    }
+  }
+
+  String _mapStatus(String? backendStatus) {
+    switch (backendStatus?.toUpperCase()) {
+      case 'OPEN': return JobStatus.posted;
+      case 'APPLICATIONS_RECEIVED': return JobStatus.applicationsReceived;
+      case 'ASSIGNED': return JobStatus.workerAccepted;
+      case 'IN_PROGRESS': return JobStatus.inProgress;
+      case 'COMPLETED': return JobStatus.completed;
+      case 'REVIEWING': return JobStatus.reviewed;
+      case 'CLOSED': return JobStatus.closed;
+      case 'CANCELLED': return JobStatus.cancelled;
+      default: return JobStatus.posted;
+    }
+  }
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null) return 'N/A';
+    try {
+      final dt = DateTime.parse(dateStr);
+      return DateFormat('MMM d, yyyy · h:mm a').format(dt);
+    } catch (_) {
+      return dateStr;
+    }
+  }
+
+  String _formatBudget(dynamic min, dynamic max) {
+    if (min != null && max != null) {
+      return 'Rs. ${_formatNumber(min)} — Rs. ${_formatNumber(max)}';
+    } else if (min != null) {
+      return 'Rs. ${_formatNumber(min)}+';
+    } else if (max != null) {
+      return 'Up to Rs. ${_formatNumber(max)}';
+    }
+    return 'TBD';
+  }
+
+  String _formatNumber(dynamic value) {
+    if (value == null) return '0';
+    final num n = value is num ? value : num.tryParse(value.toString()) ?? 0;
+    return NumberFormat('#,##0').format(n);
+  }
+
+  String _formatPrice(dynamic price) {
+    if (price == null) return 'TBD';
+    return 'Rs. ${_formatNumber(price)}';
+  }
+
+  String _getPaymentStatus(Map<String, dynamic>? payment, String? jobStatus) {
+    if (payment == null) {
+      if (jobStatus == 'COMPLETED') return 'Pending payment';
+      return 'No payment yet';
+    }
+    final status = payment['status']?.toString().toUpperCase() ?? '';
+    switch (status) {
+      case 'HELD': return 'Held in escrow';
+      case 'RELEASED': return 'Released';
+      case 'REFUNDED': return 'Refunded';
+      case 'PENDING': return 'Pending';
+      default: return status.isNotEmpty ? status : 'N/A';
+    }
+  }
+
+  Color _getPaymentStatusColor(String status) {
+    switch (status) {
+      case 'Held in escrow': return AppColors.warning;
+      case 'Released': return AppColors.success;
+      case 'Refunded': return AppColors.error;
+      default: return AppColors.textTertiary;
+    }
+  }
+
+  Color _getPaymentStatusBgColor(String status) {
+    switch (status) {
+      case 'Held in escrow': return AppColors.warningLight;
+      case 'Released': return AppColors.successLight;
+      case 'Refunded': return AppColors.errorLight;
+      default: return AppColors.surfaceVariant;
+    }
+  }
+
+  Future<void> _cancelJob() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Job'),
+        content: const Text('Are you sure you want to cancel this job? This action cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No, keep it')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Yes, cancel'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _actionLoading = true);
+    try {
+      await ApiService().cancelJob(widget.jobId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Job cancelled successfully')),
+      );
+      _fetchJob();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to cancel job: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _actionLoading = false);
+    }
+  }
+
+  Future<void> _releasePayment() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Release Payment'),
+        content: Text('Release ${_formatPrice(_job?['price'])} to the worker? This confirms the job is complete and payment will be sent.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+            child: const Text('Release Payment'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _actionLoading = true);
+    try {
+      await ApiService().createPayment(widget.jobId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Payment released successfully')),
+      );
+      _fetchJob();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to release payment: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _actionLoading = false);
+    }
+  }
+
+  void _openChat() {
+    final workerName = _job?['worker']?['user']?['name'] ?? 'Worker';
+    final jobTitle = _job?['title'] ?? '';
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          jobId: widget.jobId,
+          workerName: workerName,
+          jobTitle: jobTitle,
+        ),
+      ),
+    );
+  }
+
+  /// Build timeline items dynamically based on the job status
+  List<_TimelineItem> _buildTimelineItems() {
+    final status = _job?['status']?.toString().toUpperCase() ?? 'OPEN';
+    final workerName = _job?['worker']?['user']?['name'];
+    final createdAt = _formatDate(_job?['createdAt']);
+    final completedAt = _formatDate(_job?['completedAt']);
+
+    // Status ordering for progress calculation
+    const statusOrder = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED'];
+    final currentIndex = statusOrder.indexOf(status);
+
+    if (status == 'CANCELLED') {
+      return [
+        _TimelineItem(
+          title: 'Job Posted',
+          subtitle: createdAt,
+          isCompleted: true,
+          isFirst: true,
+        ),
+        _TimelineItem(
+          title: 'Cancelled',
+          subtitle: 'This job was cancelled',
+          isCompleted: true,
+          isLast: true,
+        ),
+      ];
+    }
+
+    return [
+      _TimelineItem(
+        title: 'Job Posted',
+        subtitle: createdAt,
+        isCompleted: currentIndex >= 0,
+        isActive: currentIndex == 0,
+        isFirst: true,
+      ),
+      _TimelineItem(
+        title: 'Worker Matched',
+        subtitle: workerName != null ? '$workerName accepted' : 'Waiting for a worker',
+        isCompleted: currentIndex >= 1,
+        isActive: currentIndex == 1,
+      ),
+      _TimelineItem(
+        title: 'In Progress',
+        subtitle: currentIndex >= 2 ? 'Work underway' : 'Pending',
+        isCompleted: currentIndex >= 2,
+        isActive: currentIndex == 2,
+      ),
+      _TimelineItem(
+        title: 'Completed',
+        subtitle: currentIndex >= 3 ? completedAt : 'Pending',
+        isCompleted: currentIndex >= 3,
+        isActive: currentIndex == 3,
+        isLast: true,
+      ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -187,79 +457,101 @@ class JobDetailScreen extends StatelessWidget {
           IconButton(icon: const Icon(Icons.more_vert_rounded), onPressed: () {}),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── 1. Header ──
-            Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: AppColors.categoryPlumbing,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Center(
-                      child: Text('🔧', style: TextStyle(fontSize: 24))),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Fix kitchen sink leak',
-                          style: AppTypography.headlineLarge),
-                      const SizedBox(height: 4),
-                      Text('Plumbing', style: AppTypography.bodySmall),
+                      Text(_error!, style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                      const SizedBox(height: 12),
+                      TextButton(onPressed: _fetchJob, child: const Text('Retry')),
                     ],
                   ),
+                )
+              : _buildBody(),
+      bottomNavigationBar: (!_isLoading && _error == null && _job != null) ? _buildBottomBar() : null,
+    );
+  }
+
+  Widget _buildBody() {
+    final job = _job!;
+    final categoryName = job['category']?['name'] ?? '';
+    final title = job['title'] ?? 'Untitled Job';
+    final description = job['description'] ?? '';
+    final status = _mapStatus(job['status']);
+    final workerUser = job['worker']?['user'];
+    final workerName = workerUser?['name'] ?? '';
+    final workerRating = job['worker']?['rating'];
+    final price = job['price'];
+    final budgetMin = job['budgetMin'];
+    final budgetMax = job['budgetMax'];
+    final urgency = job['urgency'] ?? 'Normal';
+    final address = job['address'] ?? 'N/A';
+    final scheduledAt = _formatDate(job['scheduledAt']);
+    final payment = job['payment'];
+    final jobStatus = job['status']?.toString().toUpperCase() ?? '';
+    final paymentStatusText = _getPaymentStatus(payment, jobStatus);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // -- 1. Header --
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: _getCategoryColor(categoryName),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                const JobStatusPill(status: JobStatus.inProgress),
+                child: Center(
+                    child: Text(_getCategoryIcon(categoryName),
+                        style: const TextStyle(fontSize: 24))),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppTypography.headlineLarge),
+                    const SizedBox(height: 4),
+                    Text(categoryName, style: AppTypography.bodySmall),
+                  ],
+                ),
+              ),
+              JobStatusPill(status: status),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+
+          // -- 2. Timeline --
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Job Timeline', style: AppTypography.headlineMedium),
+                const SizedBox(height: 16),
+                ..._buildTimelineItems(),
               ],
             ),
+          ),
 
-            const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
-            // ── 2. Timeline ──
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Job Timeline', style: AppTypography.headlineMedium),
-                  const SizedBox(height: 16),
-                  _TimelineItem(
-                      title: 'Job Posted',
-                      subtitle: 'Mar 18, 2026 · 9:30 AM',
-                      isCompleted: true,
-                      isFirst: true),
-                  _TimelineItem(
-                      title: 'Worker Matched',
-                      subtitle: 'Saman Fernando accepted',
-                      isCompleted: true),
-                  _TimelineItem(
-                      title: 'In Progress',
-                      subtitle: 'Worker is on the way',
-                      isActive: true),
-                  _TimelineItem(
-                      title: 'Completed',
-                      subtitle: 'Pending',
-                      isLast: true),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // ── 3. Worker info ──
+          // -- 3. Worker info (only show if a worker is assigned) --
+          if (workerName.isNotEmpty)
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -272,7 +564,8 @@ class JobDetailScreen extends StatelessWidget {
                   CircleAvatar(
                     radius: 24,
                     backgroundColor: AppColors.surfaceVariant,
-                    child: Text('S',
+                    child: Text(
+                        workerName.isNotEmpty ? workerName[0].toUpperCase() : '?',
                         style: AppTypography.headlineMedium
                             .copyWith(color: AppColors.primary)),
                   ),
@@ -281,27 +574,19 @@ class JobDetailScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Saman Fernando',
-                            style: AppTypography.headlineSmall),
+                        Text(workerName, style: AppTypography.headlineSmall),
                         Row(
                           children: [
-                            Icon(Icons.star_rounded,
-                                size: 14, color: AppColors.badgeGold),
-                            const SizedBox(width: 3),
-                            Text('4.5', style: AppTypography.labelMedium),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.badgeSilver.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text('Silver',
-                                  style: AppTypography.labelSmall.copyWith(
-                                      color: AppColors.textSecondary,
-                                      fontWeight: FontWeight.w600)),
-                            ),
+                            if (workerRating != null) ...[
+                              Icon(Icons.star_rounded,
+                                  size: 14, color: AppColors.badgeGold),
+                              const SizedBox(width: 3),
+                              Text(
+                                  workerRating is num
+                                      ? workerRating.toStringAsFixed(1)
+                                      : workerRating.toString(),
+                                  style: AppTypography.labelMedium),
+                            ],
                           ],
                         ),
                       ],
@@ -311,7 +596,7 @@ class JobDetailScreen extends StatelessWidget {
                   _ActionIcon(
                       icon: Icons.chat_bubble_outline_rounded,
                       color: AppColors.primary,
-                      onTap: () {}),
+                      onTap: _openChat),
                   const SizedBox(width: 4),
                   // Call button
                   _ActionIcon(
@@ -322,129 +607,153 @@ class JobDetailScreen extends StatelessWidget {
               ),
             ),
 
+          if (workerName.isNotEmpty) const SizedBox(height: 20),
+
+          // -- 3b. Applications (show when job is OPEN or APPLICATIONS_RECEIVED) --
+          if (jobStatus == 'OPEN' || jobStatus == 'APPLICATIONS_RECEIVED')
+            _ApplicationsSection(
+              jobId: widget.jobId,
+              onAccepted: _fetchJob,
+            ),
+
+          if (jobStatus == 'OPEN' || jobStatus == 'APPLICATIONS_RECEIVED')
             const SizedBox(height: 20),
 
-            // ── 4. Job details ──
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Details', style: AppTypography.headlineMedium),
-                  const SizedBox(height: 14),
+          // -- 4. Job details --
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Details', style: AppTypography.headlineMedium),
+                const SizedBox(height: 14),
+                if (description.isNotEmpty)
                   Text(
-                    'The kitchen sink has been leaking from the base for about a week. Water pools under the cabinet. May need to replace the seal or the entire faucet.',
+                    description,
                     style: AppTypography.bodyMedium.copyWith(
                         color: AppColors.textSecondary, height: 1.6),
                   ),
-                  const SizedBox(height: 20),
-                  _DetailRow(
-                      icon: Icons.account_balance_wallet_outlined,
-                      label: 'Budget',
-                      value: 'Rs. 3,000 — Rs. 5,000'),
-                  const SizedBox(height: 12),
-                  _DetailRow(
-                      icon: Icons.calendar_today_outlined,
-                      label: 'Scheduled',
-                      value: 'Mar 19, 2026 · 10:00 AM'),
-                  const SizedBox(height: 12),
-                  _DetailRow(
-                      icon: Icons.location_on_outlined,
-                      label: 'Location',
-                      value: '42 Galle Road, Colombo 03'),
-                  const SizedBox(height: 12),
-                  _DetailRow(
-                      icon: Icons.bolt_rounded,
-                      label: 'Urgency',
-                      value: 'Normal'),
-                ],
-              ),
+                if (description.isNotEmpty) const SizedBox(height: 20),
+                _DetailRow(
+                    icon: Icons.account_balance_wallet_outlined,
+                    label: 'Budget',
+                    value: _formatBudget(budgetMin, budgetMax)),
+                const SizedBox(height: 12),
+                _DetailRow(
+                    icon: Icons.calendar_today_outlined,
+                    label: 'Scheduled',
+                    value: scheduledAt),
+                const SizedBox(height: 12),
+                _DetailRow(
+                    icon: Icons.location_on_outlined,
+                    label: 'Location',
+                    value: address),
+                const SizedBox(height: 12),
+                _DetailRow(
+                    icon: Icons.bolt_rounded,
+                    label: 'Urgency',
+                    value: urgency),
+              ],
             ),
+          ),
 
-            const SizedBox(height: 20),
+          const SizedBox(height: 20),
 
-            // ── 5. Payment ──
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Payment', style: AppTypography.headlineMedium),
-                  const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Agreed Price',
-                          style: AppTypography.bodyMedium
-                              .copyWith(color: AppColors.textSecondary)),
-                      Text('Rs. 4,500', style: AppTypography.headlineSmall),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Escrow Status',
-                          style: AppTypography.bodyMedium
-                              .copyWith(color: AppColors.textSecondary)),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppColors.warningLight,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text('Held in escrow',
-                            style: AppTypography.labelSmall.copyWith(
-                                color: AppColors.warning,
-                                fontWeight: FontWeight.w600)),
+          // -- 5. Payment --
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Payment', style: AppTypography.headlineMedium),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Agreed Price',
+                        style: AppTypography.bodyMedium
+                            .copyWith(color: AppColors.textSecondary)),
+                    Text(_formatPrice(price), style: AppTypography.headlineSmall),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Payment Status',
+                        style: AppTypography.bodyMedium
+                            .copyWith(color: AppColors.textSecondary)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: _getPaymentStatusBgColor(paymentStatusText),
+                        borderRadius: BorderRadius.circular(6),
                       ),
-                    ],
-                  ),
-                ],
-              ),
+                      child: Text(paymentStatusText,
+                          style: AppTypography.labelSmall.copyWith(
+                              color: _getPaymentStatusColor(paymentStatusText),
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+              ],
             ),
+          ),
 
-            const SizedBox(height: 80),
-          ],
-        ),
+          const SizedBox(height: 80),
+        ],
       ),
-      // ── 6. Bottom action buttons ──
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          border: Border(top: BorderSide(color: AppColors.borderLight)),
-        ),
-        child: Row(
-          children: [
+    );
+  }
+
+  Widget? _buildBottomBar() {
+    final status = _job?['status']?.toString().toUpperCase() ?? '';
+    // Don't show action buttons for terminal states
+    if (status == 'CANCELLED' || status == 'CLOSED') return null;
+
+    final canCancel = status == 'OPEN' || status == 'ASSIGNED' || status == 'IN_PROGRESS';
+    final canRelease = status == 'COMPLETED';
+
+    if (!canCancel && !canRelease) return null;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.borderLight)),
+      ),
+      child: Row(
+        children: [
+          if (canCancel)
             Expanded(
                 child: DoerButton(
                     label: 'Cancel Job',
                     isOutlined: true,
-                    onPressed: () {})),
-            const SizedBox(width: 12),
+                    onPressed: _actionLoading ? null : _cancelJob)),
+          if (canCancel && canRelease) const SizedBox(width: 12),
+          if (canRelease)
             Expanded(
-                child:
-                    DoerButton(label: 'Release Payment', onPressed: () {})),
-          ],
-        ),
+                child: DoerButton(
+                    label: 'Release Payment',
+                    onPressed: _actionLoading ? null : _releasePayment)),
+        ],
       ),
     );
   }
 }
 
-// ── Timeline step widget ──
+// -- Timeline step widget --
 class _TimelineItem extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -541,7 +850,7 @@ class _TimelineItem extends StatelessWidget {
   }
 }
 
-// ── Detail row (icon + label + value) ──
+// -- Detail row (icon + label + value) --
 class _DetailRow extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -566,7 +875,7 @@ class _DetailRow extends StatelessWidget {
   }
 }
 
-// ── Small round icon button (chat/call) ──
+// -- Small round icon button (chat/call) --
 class _ActionIcon extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -587,6 +896,241 @@ class _ActionIcon extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, size: 18, color: color),
+      ),
+    );
+  }
+}
+
+// -- Applications section for OPEN jobs --
+class _ApplicationsSection extends StatefulWidget {
+  final String jobId;
+  final VoidCallback onAccepted;
+  const _ApplicationsSection({required this.jobId, required this.onAccepted});
+
+  @override
+  State<_ApplicationsSection> createState() => _ApplicationsSectionState();
+}
+
+class _ApplicationsSectionState extends State<_ApplicationsSection> {
+  bool _isLoading = true;
+  List<dynamic> _applications = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  Future<void> _fetch() async {
+    try {
+      _applications = await ApiService().getJobApplications(widget.jobId);
+    } catch (_) {}
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _accept(String applicationId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Accept Application'),
+        content: const Text('Accept this worker? Other pending applications will be automatically rejected.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+            child: const Text('Accept'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await ApiService().acceptApplication(applicationId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Application accepted! Worker assigned.')),
+        );
+        widget.onAccepted();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ApiService.errorMessage(e))),
+        );
+      }
+    }
+  }
+
+  Future<void> _reject(String applicationId) async {
+    try {
+      await ApiService().rejectApplication(applicationId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Application rejected')),
+        );
+        _fetch();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ApiService.errorMessage(e))),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: Padding(
+        padding: EdgeInsets.all(20),
+        child: CircularProgressIndicator(),
+      ));
+    }
+
+    final pending = _applications.where((a) =>
+      (a['status'] ?? '').toString().toUpperCase() == 'PENDING'
+    ).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('Applications', style: AppTypography.headlineMedium),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${pending.length}',
+                  style: AppTypography.labelMedium.copyWith(color: AppColors.primary),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (pending.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                'No applications yet. Workers will apply once they see your job.',
+                style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+              ),
+            )
+          else
+            ...pending.map((app) {
+              final worker = app['worker'];
+              final workerUser = worker?['user'];
+              final name = workerUser?['name'] ?? 'Worker';
+              final rating = (worker?['rating'] ?? 0).toDouble();
+              final message = app['message'] ?? '';
+              final price = app['price'];
+              final appId = app['id'] as String;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.borderLight),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: AppColors.surfaceVariant,
+                          child: Text(
+                            name.isNotEmpty ? name[0].toUpperCase() : '?',
+                            style: AppTypography.headlineSmall.copyWith(color: AppColors.primary),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(name, style: AppTypography.headlineSmall),
+                              Row(children: [
+                                const Icon(Icons.star_rounded, size: 13, color: AppColors.badgeGold),
+                                const SizedBox(width: 3),
+                                Text(rating.toStringAsFixed(1), style: AppTypography.labelSmall),
+                              ]),
+                            ],
+                          ),
+                        ),
+                        if (price != null)
+                          Text(
+                            'Rs. ${price.toStringAsFixed(0)}',
+                            style: AppTypography.headlineSmall.copyWith(color: AppColors.primary),
+                          ),
+                      ],
+                    ),
+                    if (message.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        message,
+                        style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 40,
+                            child: OutlinedButton(
+                              onPressed: () => _reject(appId),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.error,
+                                side: const BorderSide(color: AppColors.error, width: 0.5),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              child: Text('Reject', style: AppTypography.labelMedium.copyWith(color: AppColors.error)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: SizedBox(
+                            height: 40,
+                            child: ElevatedButton(
+                              onPressed: () => _accept(appId),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              child: Text('Accept', style: AppTypography.labelMedium.copyWith(color: Colors.white)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
       ),
     );
   }

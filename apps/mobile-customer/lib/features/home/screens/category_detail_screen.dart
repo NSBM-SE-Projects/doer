@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/api_service.dart';
+import '../../workers/screens/worker_screens.dart';
 
 // ──────────────────────────────────────────────────────────────
 // CATEGORY DETAIL SCREEN
@@ -14,10 +16,74 @@ import '../../../core/widgets/common_widgets.dart';
 //   3. Filter/sort bar
 //   4. List of WorkerCards for this category
 // ──────────────────────────────────────────────────────────────
-class CategoryDetailScreen extends StatelessWidget {
+class CategoryDetailScreen extends StatefulWidget {
   final ServiceCategory category;
 
   const CategoryDetailScreen({super.key, required this.category});
+
+  @override
+  State<CategoryDetailScreen> createState() => _CategoryDetailScreenState();
+}
+
+class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
+  List<dynamic> _workers = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchWorkers();
+  }
+
+  Future<void> _fetchWorkers() async {
+    try {
+      // Try fetching by category ID if available
+      List<dynamic> workers;
+      if (widget.category.id.isNotEmpty) {
+        workers = await ApiService().getWorkers(categoryId: widget.category.id);
+      } else {
+        // Fallback: fetch all workers and filter by category name
+        final all = await ApiService().getWorkers();
+        workers = all.where((w) {
+          final categories = (w['categories'] as List<dynamic>?) ?? [];
+          return categories.any((c) {
+            final cat = c['category'] as Map<String, dynamic>?;
+            final catName = (cat?['name'] as String?) ?? '';
+            return catName.toLowerCase() == widget.category.name.toLowerCase();
+          });
+        }).toList();
+      }
+      if (mounted) {
+        setState(() {
+          _workers = workers;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = ApiService.errorMessage(e);
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  String _badgeFromVerification(String? status) {
+    switch (status) {
+      case 'PLATINUM':
+        return BadgeLevel.platinum;
+      case 'GOLD':
+        return BadgeLevel.gold;
+      case 'SILVER':
+        return BadgeLevel.silver;
+      case 'BRONZE':
+        return BadgeLevel.bronze;
+      default:
+        return BadgeLevel.trainee;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +95,7 @@ class CategoryDetailScreen extends StatelessWidget {
           SliverAppBar(
             expandedHeight: 160,
             pinned: true, // keeps app bar visible when scrolled
-            backgroundColor: category.iconBgColor,
+            backgroundColor: widget.category.iconBgColor,
             leading: IconButton(
               icon: Container(
                 width: 36,
@@ -44,20 +110,25 @@ class CategoryDetailScreen extends StatelessWidget {
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
-                color: category.iconBgColor,
+                color: widget.category.iconBgColor,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Text(category.icon,
+                    Text(widget.category.icon,
                         style: const TextStyle(fontSize: 48)),
                     const SizedBox(height: 10),
-                    Text(category.name,
+                    Text(widget.category.name,
                         style: AppTypography.displaySmall),
                     const SizedBox(height: 4),
-                    Text(
-                      '24 verified workers available',
-                      style: AppTypography.bodySmall,
-                    ),
+                    _loading
+                        ? Text(
+                            'Loading workers...',
+                            style: AppTypography.bodySmall,
+                          )
+                        : Text(
+                            '${_workers.length} verified worker${_workers.length == 1 ? '' : 's'} available',
+                            style: AppTypography.bodySmall,
+                          ),
                     const SizedBox(height: 20),
                   ],
                 ),
@@ -105,7 +176,7 @@ class CategoryDetailScreen extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                    'Need a ${category.name.toLowerCase()} job done?',
+                                    'Need a ${widget.category.name.toLowerCase()} job done?',
                                     style: AppTypography.headlineSmall),
                                 Text('Post a job and get matched instantly',
                                     style: AppTypography.bodySmall),
@@ -181,37 +252,105 @@ class CategoryDetailScreen extends StatelessWidget {
           ),
 
           // ── 4. Worker list ──
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  // Mock worker data
-                  final workers = [
-                    ('Nimal Perera', 'gold', 4.8, 2.1),
-                    ('Saman Fernando', 'silver', 4.5, 3.4),
-                    ('Ruwan Jayasinghe', 'bronze', 4.2, 5.1),
-                    ('Kasun Bandara', 'gold', 4.7, 4.2),
-                    ('Chaminda Rajapaksa', 'trainee', 4.0, 6.8),
-                  ];
-                  if (index >= workers.length) return null;
-                  final w = workers[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: WorkerCard(
-                      name: w.$1,
-                      skill: category.name,
-                      badge: w.$2,
-                      rating: w.$3,
-                      distance: w.$4,
-                      onTap: () {},
-                    ),
-                  );
-                },
-                childCount: 5,
+          if (_loading)
+            const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_error != null)
+            SliverFillRemaining(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.error_outline,
+                          size: 48, color: AppColors.error),
+                      const SizedBox(height: 16),
+                      Text(
+                        _error!,
+                        style: AppTypography.bodyMedium
+                            .copyWith(color: AppColors.textSecondary),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      DoerButton(
+                        label: 'Retry',
+                        onPressed: () {
+                          setState(() {
+                            _loading = true;
+                            _error = null;
+                          });
+                          _fetchWorkers();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else if (_workers.isEmpty)
+            SliverFillRemaining(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.person_search_rounded,
+                          size: 48,
+                          color: AppColors.textTertiary.withValues(alpha: 0.5)),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No workers available in this category yet',
+                        style: AppTypography.bodyMedium
+                            .copyWith(color: AppColors.textTertiary),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final w = _workers[index] as Map<String, dynamic>;
+                    final user = w['user'] as Map<String, dynamic>? ?? {};
+                    final name = (user['name'] as String?) ?? 'Unknown';
+                    final rating =
+                        (w['rating'] as num?)?.toDouble() ?? 0.0;
+                    final verificationStatus =
+                        w['verificationStatus'] as String?;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: WorkerCard(
+                        name: name,
+                        skill: widget.category.name,
+                        badge: _badgeFromVerification(verificationStatus),
+                        rating: rating,
+                        distance: 0.0,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => WorkerProfileScreen(
+                                workerId: w['id'].toString(),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  },
+                  childCount: _workers.length,
+                ),
               ),
             ),
-          ),
           const SliverToBoxAdapter(child: SizedBox(height: 40)),
         ],
       ),

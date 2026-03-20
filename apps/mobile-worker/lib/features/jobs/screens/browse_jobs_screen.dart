@@ -201,6 +201,7 @@ class _BrowseJobsScreenState extends State<BrowseJobsScreen> {
                                       description: job['description'] ?? '',
                                       scheduledDate: '',
                                       address: job['address'] ?? '',
+                                      status: job['status'],
                                     ),
                                   );
                                 },

@@ -66,13 +66,19 @@ Route<dynamic> generateRoute(RouteSettings settings) {
     case AppRoutes.notifications:
       return _buildRoute(const NotificationsScreen());
     case AppRoutes.payment:
-      return _buildRoute(const PaymentScreen());
+      final jobId = settings.arguments as String? ?? '';
+      return _buildRoute(PaymentScreen(jobId: jobId));
     case AppRoutes.paymentHistory:
       return _buildRoute(const PaymentHistoryScreen());
     case AppRoutes.settings:
       return _buildRoute(const SettingsScreen());
     case AppRoutes.review:
-      return _buildRoute(const RateReviewScreen());
+      final args = settings.arguments as Map<String, String>? ?? {};
+      return _buildRoute(RateReviewScreen(
+        jobId: args['jobId'] ?? '',
+        workerName: args['workerName'] ?? '',
+        jobTitle: args['jobTitle'] ?? '',
+      ));
     default:
       return _buildRoute(const MainShell());
   }

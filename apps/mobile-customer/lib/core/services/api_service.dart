@@ -20,6 +20,15 @@ class ApiService {
         }
         handler.next(options);
       },
+      onError: (error, handler) async {
+        if (error.response?.statusCode == 401) {
+          final path = error.requestOptions.path;
+          if (!path.contains('/auth/')) {
+            await _clearJwt();
+          }
+        }
+        handler.next(error);
+      },
     ));
   }
 
@@ -53,18 +62,16 @@ class ApiService {
   // ══ AUTH ══
 
   Future<Map<String, dynamic>> register({
-    required String firebaseToken,
-    required String firebaseUid,
     required String email,
+    required String password,
     required String name,
     String? phone,
   }) async {
     final resp = await _dio.post('/auth/register', data: {
-      'firebaseToken': firebaseToken,
-      'firebaseUid': firebaseUid,
       'email': email,
+      'password': password,
       'name': name,
-      'phone': phone,
+      if (phone != null) 'phone': phone,
       'role': 'CUSTOMER',
     });
     await _saveJwt(resp.data['token']);
@@ -72,12 +79,12 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> login({
-    required String firebaseToken,
-    required String firebaseUid,
+    required String email,
+    required String password,
   }) async {
     final resp = await _dio.post('/auth/login', data: {
-      'firebaseToken': firebaseToken,
-      'firebaseUid': firebaseUid,
+      'email': email,
+      'password': password,
     });
     await _saveJwt(resp.data['token']);
     return resp.data;

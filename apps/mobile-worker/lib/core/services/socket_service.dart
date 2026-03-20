@@ -7,7 +7,6 @@ class SocketService {
   factory SocketService() => _instance;
   SocketService._internal();
 
-  // TODO: Update to your Render URL in production
   static const _serverUrl = String.fromEnvironment(
     'SOCKET_URL',
     defaultValue: 'http://10.0.2.2:3000',

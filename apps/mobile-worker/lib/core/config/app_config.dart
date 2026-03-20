@@ -8,4 +8,14 @@ class AppConfig {
     'SOCKET_URL',
     defaultValue: 'http://10.0.2.2:3000',
   );
+
+  static const agoraAppId = String.fromEnvironment(
+    'AGORA_APP_ID',
+    defaultValue: '31f90299731945e19630e2b96ee78154',
+  );
+
+  static const firebaseApiKey = String.fromEnvironment(
+    'FIREBASE_API_KEY',
+    defaultValue: 'AIzaSyDlYooo-DvtaSPSQVuPJ74YUj1HwcTG-nM',
+  );
 }

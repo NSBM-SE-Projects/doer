@@ -1,16 +1,8 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/api_service.dart';
 
-// ──────────────────────────────────────────────────────────────
-// SPLASH SCREEN (with Firebase Auth check)
-// Shows logo for 2 seconds, then:
-//   - If user is logged in → go to home
-//   - If not → go to onboarding
-// ──────────────────────────────────────────────────────────────
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -23,7 +15,6 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _controller;
   late Animation<double> _fadeIn;
   late Animation<double> _scale;
-  final _authService = AuthService();
 
   @override
   void initState() {
@@ -40,13 +31,22 @@ class _SplashScreenState extends State<SplashScreen>
     );
     _controller.forward();
 
-    // After 2 seconds, check auth state and navigate
     Future.delayed(const Duration(seconds: 2), () async {
       if (!mounted) return;
-      final user = _authService.currentUser;
+      final user = AuthService().currentUser;
       if (user != null) {
-        // Ensure user is registered with backend
-        await _ensureBackendAuth(user);
+        // Verify the user has a CUSTOMER role
+        final allowed = await _verifyCustomerRole();
+        if (!allowed && mounted) {
+          await AuthService().signOut();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('This app is for customers only. Please use the Worker app.')),
+            );
+            Navigator.pushReplacementNamed(context, '/onboarding');
+          }
+          return;
+        }
         if (mounted) Navigator.pushReplacementNamed(context, '/');
       } else {
         if (mounted) Navigator.pushReplacementNamed(context, '/onboarding');
@@ -54,31 +54,13 @@ class _SplashScreenState extends State<SplashScreen>
     });
   }
 
-  Future<void> _ensureBackendAuth(User user) async {
-    final uid = user.uid;
-    final email = user.email ?? '';
-    final name = user.displayName ?? email.split('@').first;
-
-    // Try login first
+  Future<bool> _verifyCustomerRole() async {
     try {
-      await ApiService().login(firebaseToken: uid, firebaseUid: uid);
-      print('Backend login OK');
-      return;
-    } catch (e) {
-      print('Backend login failed: ${e is DioException ? '${e.response?.statusCode} ${e.response?.data}' : e}');
-    }
-
-    // Login failed — try register
-    try {
-      await ApiService().register(
-        firebaseToken: uid,
-        firebaseUid: uid,
-        email: email,
-        name: name,
-      );
-      print('Backend register OK');
-    } catch (e) {
-      print('Backend register failed: ${e is DioException ? '${e.response?.statusCode} ${e.response?.data}' : e}');
+      final data = await ApiService().getMe();
+      final role = data['user']?['role'];
+      return role == 'CUSTOMER' || role == 'ADMIN';
+    } catch (_) {
+      return true;
     }
   }
 

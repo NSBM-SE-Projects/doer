@@ -3,11 +3,6 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/api_service.dart';
 
-// ──────────────────────────────────────────────────────────────
-// SPLASH SCREEN
-// First screen shown when the worker app opens.
-// Animated Doer logo for 2 seconds, then navigate to onboarding.
-// ──────────────────────────────────────────────────────────────
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -20,7 +15,6 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _controller;
   late Animation<double> _fadeIn;
   late Animation<double> _scale;
-  final _authService = AuthService();
 
   @override
   void initState() {
@@ -39,9 +33,20 @@ class _SplashScreenState extends State<SplashScreen>
 
     Future.delayed(const Duration(seconds: 2), () async {
       if (!mounted) return;
-      final user = _authService.currentUser;
+      final user = AuthService().currentUser;
       if (user != null) {
-        await _ensureBackendAuth(user);
+        // Verify the user has a WORKER role
+        final allowed = await _verifyWorkerRole();
+        if (!allowed && mounted) {
+          await AuthService().signOut();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('This app is for workers only. Please use the Customer app.')),
+            );
+            Navigator.pushReplacementNamed(context, '/onboarding');
+          }
+          return;
+        }
         if (mounted) Navigator.pushReplacementNamed(context, '/');
       } else {
         if (mounted) Navigator.pushReplacementNamed(context, '/onboarding');
@@ -49,20 +54,13 @@ class _SplashScreenState extends State<SplashScreen>
     });
   }
 
-  Future<void> _ensureBackendAuth(WorkerUser user) async {
+  Future<bool> _verifyWorkerRole() async {
     try {
-      try {
-        await ApiService().login(firebaseToken: user.idToken, firebaseUid: user.uid);
-      } catch (_) {
-        await ApiService().register(
-          firebaseToken: user.idToken,
-          firebaseUid: user.uid,
-          email: user.email,
-          name: user.displayName ?? user.email.split('@').first,
-        );
-      }
-    } catch (e) {
-      print('Backend sync failed: $e');
+      final data = await ApiService().getMe();
+      final role = data['user']?['role'];
+      return role == 'WORKER' || role == 'ADMIN';
+    } catch (_) {
+      return true;
     }
   }
 
@@ -84,7 +82,6 @@ class _SplashScreenState extends State<SplashScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Doer logo
                 Image.asset(
                   'assets/images/doer_logo.png',
                   width: 180,

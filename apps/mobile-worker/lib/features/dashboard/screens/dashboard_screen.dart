@@ -5,6 +5,9 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/auth_service.dart';
+import '../../jobs/screens/job_detail_screen.dart';
+import '../../jobs/screens/my_jobs_screen.dart';
+import '../../jobs/screens/browse_jobs_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -22,6 +25,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _totalJobs = 0;
   List<dynamic> _availableJobs = [];
   List<dynamic> _activeJobs = [];
+  double _totalEarnings = 0;
+  double _pendingPayout = 0;
 
   @override
   void initState() {
@@ -35,6 +40,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ApiService().getMe(),
         ApiService().getAvailableJobs(),
         ApiService().getMyJobs(),
+        ApiService().getMyPayments(),
       ]);
 
       final userData = results[0] as Map<String, dynamic>;
@@ -52,6 +58,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _activeJobs = allJobs.where((j) =>
           j['status'] == 'ASSIGNED' || j['status'] == 'IN_PROGRESS'
         ).toList();
+
+        final payments = results[3] as List;
+        _totalEarnings = 0;
+        _pendingPayout = 0;
+        for (final p in payments) {
+          final amount = (p['amount'] ?? 0).toDouble();
+          if (p['status'] == 'COMPLETED') {
+            _totalEarnings += amount;
+          } else if (p['status'] == 'PENDING') {
+            _pendingPayout += amount;
+          }
+        }
+
         _isLoading = false;
       });
     } catch (e) {
@@ -76,6 +95,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
       c.name.toLowerCase() == (categoryName ?? '').toLowerCase()
     );
     return cat.isNotEmpty ? cat.first.icon : '🔧';
+  }
+
+  JobDetailData _jobDetailFromMap(Map<String, dynamic> job) {
+    final catName = job['category']?['name'] ?? '';
+    return JobDetailData(
+      id: job['id'] ?? '',
+      title: job['title'] ?? '',
+      category: catName,
+      categoryIcon: _getCategoryIcon(catName),
+      budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : 'Negotiable',
+      distanceKm: 0,
+      postedAt: _timeAgo(job['createdAt']),
+      clientName: job['customer']?['user']?['name'] ?? 'Customer',
+      clientRating: (job['customer']?['user']?['customerProfile']?['rating'] ?? 0).toDouble(),
+      clientJobsPosted: 0,
+      description: job['description'] ?? '',
+      scheduledDate: job['scheduledDate'] ?? '',
+      address: job['address'] ?? '',
+      status: job['status'],
+    );
   }
 
   @override
@@ -199,8 +238,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: EarningsSummaryCard(
-                        totalEarnings: 'Rs. ${_totalJobs * 3500}',
-                        pendingPayout: 'Rs. 0',
+                        totalEarnings: 'Rs. ${_totalEarnings.toStringAsFixed(0)}',
+                        pendingPayout: 'Rs. ${_pendingPayout.toStringAsFixed(0)}',
                         thisMonth: '$_totalJobs jobs done',
                       ),
                     ),
@@ -256,7 +295,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Column(
                           children: [
-                            SectionHeader(title: 'Active Job', actionText: 'My Jobs', onAction: () {}),
+                            SectionHeader(title: 'Active Job', actionText: 'My Jobs', onAction: () {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const MyJobsScreen()));
+                            }),
                             ..._activeJobs.map((job) => Padding(
                               padding: const EdgeInsets.only(bottom: 12),
                               child: ActiveJobCard(
@@ -267,7 +308,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 clientName: job['customer']?['user']?['name'] ?? 'Customer',
                                 scheduledDate: '',
                                 budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : '',
-                                onTap: () {},
+                                onTap: () {
+                                  Navigator.pushNamed(
+                                    context,
+                                    AppRoutes.jobDetail,
+                                    arguments: _jobDetailFromMap(job),
+                                  );
+                                },
                               ),
                             )),
                           ],
@@ -282,7 +329,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: SectionHeader(title: 'Nearby Jobs', actionText: 'Browse all', onAction: () {}),
+                      child: SectionHeader(title: 'Nearby Jobs', actionText: 'Browse all', onAction: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const BrowseJobsScreen()));
+                      }),
                     ),
                   ),
 
@@ -317,7 +366,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 location: job['address'] ?? '',
                                 distance: 0,
                                 postedAt: _timeAgo(job['createdAt']),
-                                onTap: () {},
+                                onTap: () {
+                                  Navigator.pushNamed(
+                                    context,
+                                    AppRoutes.jobDetail,
+                                    arguments: _jobDetailFromMap(job),
+                                  );
+                                },
                               ),
                             );
                           },
