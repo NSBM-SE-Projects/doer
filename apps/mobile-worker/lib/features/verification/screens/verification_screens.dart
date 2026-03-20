@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/api_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // VERIFICATION SCREEN
@@ -123,7 +124,12 @@ class VerificationScreen extends StatelessWidget {
             const SizedBox(height: 20),
             DoerButton(
               label: 'Upload Police Certificate',
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Document upload coming soon')),
+                );
+              },
             ),
             const SizedBox(height: 16),
           ],
@@ -260,9 +266,46 @@ class _NicUploadScreenState extends State<NicUploadScreen> {
   bool _frontUploaded = false;
   bool _backUploaded = false;
   bool _isSubmitting = false;
+  final _nicController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nicController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitNic() async {
+    final nicNumber = _nicController.text.trim();
+    if (nicNumber.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your NIC number')),
+      );
+      return;
+    }
+    setState(() => _isSubmitting = true);
+    try {
+      await ApiService().updateWorkerProfile(nicNumber: nicNumber);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('NIC submitted successfully')),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to submit NIC: $e')),
+        );
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final nicFilled = _nicController.text.trim().isNotEmpty;
+    final canSubmit = _frontUploaded && _backUploaded && nicFilled;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -287,6 +330,26 @@ class _NicUploadScreenState extends State<NicUploadScreen> {
 
             const SizedBox(height: 24),
 
+            // NIC number input
+            TextField(
+              controller: _nicController,
+              decoration: InputDecoration(
+                labelText: 'NIC Number',
+                hintText: 'e.g. 200012345678 or 901234567V',
+                prefixIcon: const Icon(Icons.badge_outlined),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+
+            const SizedBox(height: 16),
+
             _UploadCard(
               label: 'NIC Front',
               icon: Icons.credit_card_outlined,
@@ -308,12 +371,7 @@ class _NicUploadScreenState extends State<NicUploadScreen> {
             DoerButton(
               label: 'Submit for Verification',
               isLoading: _isSubmitting,
-              onPressed: (_frontUploaded && _backUploaded)
-                  ? () {
-                      setState(() => _isSubmitting = true);
-                      // TODO: Upload NIC to backend
-                    }
-                  : null,
+              onPressed: canSubmit ? _submitNic : null,
             ),
 
             const SizedBox(height: 16),
@@ -395,9 +453,9 @@ class _QualificationUploadScreenState
             // Add document button
             GestureDetector(
               onTap: () {
-                setState(() {
-                  _uploadedDocs.add('Certificate ${_uploadedDocs.length + 1}.pdf');
-                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Document upload coming soon')),
+                );
               },
               child: Container(
                 width: double.infinity,
@@ -431,8 +489,9 @@ class _QualificationUploadScreenState
               isLoading: _isSubmitting,
               onPressed: _uploadedDocs.isNotEmpty
                   ? () {
-                      setState(() => _isSubmitting = true);
-                      // TODO: Upload documents to backend
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Document upload coming soon')),
+                      );
                     }
                   : null,
             ),

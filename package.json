@@ -8,5 +8,9 @@
   "scripts": {
     "backend": "npm run dev --workspace=apps/backend",
     "admin": "npm run dev --workspace=apps/admin"
+  },
+  "dependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^3.0.3"
   }
 }

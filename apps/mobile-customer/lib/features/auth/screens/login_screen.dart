@@ -3,6 +3,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/api_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // LOGIN SCREEN (connected to Firebase Auth)
@@ -51,8 +52,22 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text,
       );
       if (mounted) {
-        // Success → go to home
-        Navigator.pushReplacementNamed(context, '/');
+        // Verify user is a customer
+        try {
+          final data = await ApiService().getMe();
+          final role = data['user']?['role'];
+          if (role != 'CUSTOMER' && role != 'ADMIN') {
+            await _authService.signOut();
+            if (mounted) {
+              setState(() {
+                _errorMessage = 'This app is for customers only. Please use the Worker app.';
+                _isLoading = false;
+              });
+            }
+            return;
+          }
+        } catch (_) {}
+        if (mounted) Navigator.pushReplacementNamed(context, '/');
       }
     } catch (e) {
       if (mounted) {
@@ -76,18 +91,10 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               const SizedBox(height: 48),
 
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  Icons.home_repair_service_rounded,
-                  size: 26,
-                  color: Colors.white,
-                ),
+              Image.asset(
+                'assets/images/doer_logo.png',
+                width: 140,
+                height: 140,
               ),
 
               const SizedBox(height: 28),
@@ -214,7 +221,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 height: AppSizing.buttonHeight,
                 child: OutlinedButton.icon(
                   onPressed: () {
-                    // TODO: Google sign in
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Google sign-in coming soon')),
+                    );
                   },
                   icon: const Icon(Icons.g_mobiledata_rounded,
                       size: 24, color: AppColors.textPrimary),

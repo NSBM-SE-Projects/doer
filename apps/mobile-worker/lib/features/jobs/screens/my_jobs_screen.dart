@@ -2,14 +2,10 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/api_service.dart';
+import '../../../core/router/app_router.dart';
+import 'job_detail_screen.dart';
 
-// ──────────────────────────────────────────────────────────────
-// MY JOBS SCREEN
-// Worker's job history with tabs:
-//   - Active: accepted + in_progress jobs
-//   - Applied: pending applications
-//   - Completed: done jobs
-// ──────────────────────────────────────────────────────────────
 class MyJobsScreen extends StatefulWidget {
   const MyJobsScreen({super.key});
 
@@ -20,17 +16,70 @@ class MyJobsScreen extends StatefulWidget {
 class _MyJobsScreenState extends State<MyJobsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  bool _isLoading = true;
+  List<dynamic> _activeJobs = [];
+  List<dynamic> _appliedJobs = [];
+  List<dynamic> _completedJobs = [];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _fetchJobs();
+  }
+
+  Future<void> _fetchJobs() async {
+    setState(() => _isLoading = true);
+    try {
+      final results = await Future.wait([
+        ApiService().getMyJobs(),
+        ApiService().getMyApplications(),
+      ]);
+      final data = results[0] as Map<String, dynamic>;
+      final jobs = data['jobs'] as List;
+      final applications = results[1] as List;
+      setState(() {
+        _activeJobs = jobs.where((j) =>
+          j['status'] == 'ASSIGNED' || j['status'] == 'IN_PROGRESS'
+        ).toList();
+        _appliedJobs = applications;
+        _completedJobs = jobs.where((j) => j['status'] == 'COMPLETED').toList();
+        _isLoading = false;
+      });
+    } catch (_) {
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  String _getCategoryIcon(String? name) {
+    final cat = AppCategories.all.where((c) => c.name.toLowerCase() == (name ?? '').toLowerCase());
+    return cat.isNotEmpty ? cat.first.icon : '🔧';
+  }
+
+  JobDetailData _jobDetailFromMap(Map<String, dynamic> job) {
+    final catName = job['category']?['name'] ?? '';
+    return JobDetailData(
+      id: job['id'] ?? '',
+      title: job['title'] ?? '',
+      category: catName,
+      categoryIcon: _getCategoryIcon(catName),
+      budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : 'Negotiable',
+      distanceKm: 0,
+      postedAt: _formatDate(job['createdAt']),
+      clientName: job['customer']?['user']?['name'] ?? 'Customer',
+      clientRating: (job['customer']?['user']?['customerProfile']?['rating'] ?? 0).toDouble(),
+      clientJobsPosted: 0,
+      description: job['description'] ?? '',
+      scheduledDate: _formatDate(job['scheduledDate']),
+      address: job['address'] ?? '',
+      status: job['status'],
+    );
   }
 
   @override
@@ -45,7 +94,6 @@ class _MyJobsScreenState extends State<MyJobsScreen>
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
               child: Text('My Jobs', style: AppTypography.displaySmall),
             ),
-
             const SizedBox(height: 12),
 
             // Tab bar
@@ -60,229 +108,137 @@ class _MyJobsScreenState extends State<MyJobsScreen>
                 child: TabBar(
                   controller: _tabController,
                   labelStyle: AppTypography.labelMedium.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
+                    fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                   unselectedLabelStyle: AppTypography.labelMedium,
                   unselectedLabelColor: AppColors.textTertiary,
                   indicator: BoxDecoration(
                     color: AppColors.surface,
                     borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.06),
-                        blurRadius: 4,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
+                    boxShadow: [BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 4, offset: const Offset(0, 1))],
                   ),
                   indicatorSize: TabBarIndicatorSize.tab,
                   dividerColor: Colors.transparent,
-                  tabs: const [
-                    Tab(text: 'Active'),
-                    Tab(text: 'Applied'),
-                    Tab(text: 'Completed'),
-                  ],
+                  tabs: const [Tab(text: 'Active'), Tab(text: 'Applied'), Tab(text: 'Completed')],
                 ),
               ),
             ),
-
             const SizedBox(height: 12),
 
             Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: const [
-                  _ActiveJobsTab(),
-                  _AppliedJobsTab(),
-                  _CompletedJobsTab(),
-                ],
-              ),
+              child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      // Active
+                      _activeJobs.isEmpty
+                        ? const EmptyState(icon: '📋', title: 'No active jobs', subtitle: 'Accept a job to see it here')
+                        : RefreshIndicator(
+                            onRefresh: _fetchJobs,
+                            child: ListView.separated(
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              itemCount: _activeJobs.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              itemBuilder: (_, i) {
+                                final job = _activeJobs[i];
+                                return ActiveJobCard(
+                                  title: job['title'] ?? '',
+                                  categoryIcon: _getCategoryIcon(job['category']?['name']),
+                                  status: job['status'] == 'IN_PROGRESS'
+                                      ? JobStatus.inProgress : JobStatus.workerAccepted,
+                                  clientName: job['customer']?['user']?['name'] ?? 'Customer',
+                                  scheduledDate: '',
+                                  budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : '',
+                                  onTap: () {
+                                    Navigator.pushNamed(
+                                      context,
+                                      AppRoutes.jobDetail,
+                                      arguments: _jobDetailFromMap(job),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                      // Applied
+                      _appliedJobs.isEmpty
+                        ? const EmptyState(icon: '📝', title: 'No applications', subtitle: 'Apply to jobs to see them here')
+                        : RefreshIndicator(
+                            onRefresh: _fetchJobs,
+                            child: ListView.separated(
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              itemCount: _appliedJobs.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              itemBuilder: (_, i) {
+                                final app = _appliedJobs[i];
+                                final job = app['job'] ?? {};
+                                final catName = job['category']?['name'] ?? '';
+                                final status = app['status'] ?? 'PENDING';
+                                return _AppliedJobCard(
+                                  title: job['title'] ?? '',
+                                  categoryIcon: _getCategoryIcon(catName),
+                                  status: status,
+                                  budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : 'Negotiable',
+                                  appliedAt: _formatDate(app['createdAt']),
+                                  onTap: () {
+                                    Navigator.pushNamed(
+                                      context,
+                                      AppRoutes.jobDetail,
+                                      arguments: _jobDetailFromMap(job),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                      // Completed
+                      _completedJobs.isEmpty
+                        ? const EmptyState(icon: '✅', title: 'No completed jobs', subtitle: 'Completed jobs will appear here')
+                        : RefreshIndicator(
+                            onRefresh: _fetchJobs,
+                            child: ListView.separated(
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              itemCount: _completedJobs.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              itemBuilder: (_, i) {
+                                final job = _completedJobs[i];
+                                return _CompletedJobCard(
+                                  title: job['title'] ?? '',
+                                  categoryIcon: _getCategoryIcon(job['category']?['name']),
+                                  clientName: job['customer']?['user']?['name'] ?? 'Customer',
+                                  completedDate: _formatDate(job['completedAt']),
+                                  earned: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : '',
+                                  rating: (job['review']?['rating'] ?? 0).toDouble(),
+                                );
+                              },
+                            ),
+                          ),
+                    ],
+                  ),
             ),
           ],
         ),
       ),
     );
   }
-}
 
-// ── Active jobs tab ──
-class _ActiveJobsTab extends StatelessWidget {
-  const _ActiveJobsTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      children: [
-        ActiveJobCard(
-          title: 'Fix kitchen plumbing leak',
-          categoryIcon: '🔧',
-          status: JobStatus.inProgress,
-          clientName: 'Nimal Jayawardena',
-          scheduledDate: 'Today, 2:00 PM',
-          budget: 'Rs. 3,500',
-          onTap: () {},
-        ),
-        const SizedBox(height: 12),
-        ActiveJobCard(
-          title: 'Install ceiling fan in master bedroom',
-          categoryIcon: '⚡',
-          status: JobStatus.workerAccepted,
-          clientName: 'Priya Fernando',
-          scheduledDate: 'Tomorrow, 9:00 AM',
-          budget: 'Rs. 2,000',
-          onTap: () {},
-        ),
-        const SizedBox(height: 32),
-      ],
-    );
-  }
-}
-
-// ── Applied jobs tab ──
-class _AppliedJobsTab extends StatelessWidget {
-  const _AppliedJobsTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      children: [
-        _ApplicationCard(
-          title: 'Paint exterior walls',
-          categoryIcon: '🎨',
-          budget: 'Rs. 8,000',
-          appliedAt: '2 hours ago',
-          status: 'Pending',
-        ),
-        const SizedBox(height: 12),
-        _ApplicationCard(
-          title: 'Garden maintenance - weekly',
-          categoryIcon: '🌿',
-          budget: 'Rs. 1,800',
-          appliedAt: 'Yesterday',
-          status: 'Viewed',
-        ),
-        const SizedBox(height: 32),
-      ],
-    );
-  }
-}
-
-class _ApplicationCard extends StatelessWidget {
-  final String title;
-  final String categoryIcon;
-  final String budget;
-  final String appliedAt;
-  final String status;
-
-  const _ApplicationCard({
-    required this.title,
-    required this.categoryIcon,
-    required this.budget,
-    required this.appliedAt,
-    required this.status,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Text(categoryIcon, style: const TextStyle(fontSize: 24)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: AppTypography.headlineSmall),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(budget,
-                        style: AppTypography.labelMedium
-                            .copyWith(color: AppColors.primary)),
-                    const SizedBox(width: 8),
-                    Text('• $appliedAt', style: AppTypography.labelSmall),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.infoLight,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              status,
-              style: AppTypography.labelSmall.copyWith(
-                color: AppColors.info,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Completed jobs tab ──
-class _CompletedJobsTab extends StatelessWidget {
-  const _CompletedJobsTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      children: [
-        _CompletedJobCard(
-          title: 'Fix bathroom pipe leak',
-          categoryIcon: '🔧',
-          clientName: 'Suresh Perera',
-          completedDate: '15 Mar 2026',
-          earned: 'Rs. 2,800',
-          rating: 4.8,
-        ),
-        const SizedBox(height: 12),
-        _CompletedJobCard(
-          title: 'Deep clean apartment',
-          categoryIcon: '🧹',
-          clientName: 'Amali Senanayake',
-          completedDate: '12 Mar 2026',
-          earned: 'Rs. 4,200',
-          rating: 5.0,
-        ),
-        const SizedBox(height: 32),
-      ],
-    );
+  String _formatDate(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final dt = DateTime.parse(dateStr);
+      return '${dt.day} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.month - 1]} ${dt.year}';
+    } catch (_) { return ''; }
   }
 }
 
 class _CompletedJobCard extends StatelessWidget {
-  final String title;
-  final String categoryIcon;
-  final String clientName;
-  final String completedDate;
-  final String earned;
+  final String title, categoryIcon, clientName, completedDate, earned;
   final double rating;
-
   const _CompletedJobCard({
-    required this.title,
-    required this.categoryIcon,
-    required this.clientName,
-    required this.completedDate,
-    required this.earned,
-    required this.rating,
+    required this.title, required this.categoryIcon, required this.clientName,
+    required this.completedDate, required this.earned, required this.rating,
   });
 
   @override
@@ -290,45 +246,104 @@ class _CompletedJobCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.surface, borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
+          Row(children: [
+            Text(categoryIcon, style: const TextStyle(fontSize: 22)),
+            const SizedBox(width: 10),
+            Expanded(child: Text(title, style: AppTypography.headlineSmall)),
+            Text(earned, style: AppTypography.headlineSmall.copyWith(color: AppColors.success)),
+          ]),
+          const SizedBox(height: 10),
+          Row(children: [
+            Icon(Icons.person_outline_rounded, size: 13, color: AppColors.textTertiary),
+            const SizedBox(width: 4),
+            Text(clientName, style: AppTypography.labelSmall),
+            const SizedBox(width: 10),
+            Icon(Icons.calendar_today_outlined, size: 13, color: AppColors.textTertiary),
+            const SizedBox(width: 4),
+            Text(completedDate, style: AppTypography.labelSmall),
+            const Spacer(),
+            if (rating > 0) RatingStars(rating: rating, size: 14),
+          ]),
+        ],
+      ),
+    );
+  }
+}
+
+class _AppliedJobCard extends StatelessWidget {
+  final String title, categoryIcon, status, budget, appliedAt;
+  final VoidCallback onTap;
+  const _AppliedJobCard({
+    required this.title, required this.categoryIcon, required this.status,
+    required this.budget, required this.appliedAt, required this.onTap,
+  });
+
+  Color get _statusColor {
+    switch (status) {
+      case 'ACCEPTED': return AppColors.success;
+      case 'REJECTED': return AppColors.error;
+      default: return AppColors.warning;
+    }
+  }
+
+  String get _statusLabel {
+    switch (status) {
+      case 'ACCEPTED': return 'Accepted';
+      case 'REJECTED': return 'Rejected';
+      default: return 'Pending';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
               Text(categoryIcon, style: const TextStyle(fontSize: 22)),
               const SizedBox(width: 10),
-              Expanded(
-                child: Text(title, style: AppTypography.headlineSmall),
-              ),
-              Text(
-                earned,
-                style: AppTypography.headlineSmall.copyWith(
-                  color: AppColors.success,
+              Expanded(child: Text(title, style: AppTypography.headlineSmall)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _statusLabel,
+                  style: AppTypography.labelSmall.copyWith(
+                    color: _statusColor,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Icon(Icons.person_outline_rounded,
-                  size: 13, color: AppColors.textTertiary),
-              const SizedBox(width: 4),
-              Text(clientName, style: AppTypography.labelSmall),
-              const SizedBox(width: 10),
-              Icon(Icons.calendar_today_outlined,
-                  size: 13, color: AppColors.textTertiary),
-              const SizedBox(width: 4),
-              Text(completedDate, style: AppTypography.labelSmall),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
+              Text(budget, style: AppTypography.labelMedium.copyWith(
+                color: AppColors.primary, fontWeight: FontWeight.w600)),
               const Spacer(),
-              RatingStars(rating: rating, size: 14),
-            ],
-          ),
-        ],
+              Icon(Icons.access_time_rounded, size: 13, color: AppColors.textTertiary),
+              const SizedBox(width: 4),
+              Text('Applied $appliedAt', style: AppTypography.labelSmall),
+            ]),
+          ],
+        ),
       ),
     );
   }

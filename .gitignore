@@ -22,6 +22,10 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Firebase config (contains API keys)
+**/google-services.json
+**/GoogleService-Info.plist
+
 # Prisma
 apps/backend/prisma/migrations/
 

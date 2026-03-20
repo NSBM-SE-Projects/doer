@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/api_service.dart';
 
-// ──────────────────────────────────────────────────────────────
-// SPLASH SCREEN
-// First screen shown when the worker app opens.
-// Animated Doer logo for 2 seconds, then navigate to onboarding.
-// ──────────────────────────────────────────────────────────────
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -19,7 +15,6 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _controller;
   late Animation<double> _fadeIn;
   late Animation<double> _scale;
-  final _authService = AuthService();
 
   @override
   void initState() {
@@ -36,17 +31,37 @@ class _SplashScreenState extends State<SplashScreen>
     );
     _controller.forward();
 
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        if (_authService.currentUser != null) {
-          // Already logged in → go straight to home
-          Navigator.pushReplacementNamed(context, '/');
-        } else {
-          // Not logged in → show onboarding
-          Navigator.pushReplacementNamed(context, '/onboarding');
+    Future.delayed(const Duration(seconds: 2), () async {
+      if (!mounted) return;
+      final user = AuthService().currentUser;
+      if (user != null) {
+        // Verify the user has a WORKER role
+        final allowed = await _verifyWorkerRole();
+        if (!allowed && mounted) {
+          await AuthService().signOut();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('This app is for workers only. Please use the Customer app.')),
+            );
+            Navigator.pushReplacementNamed(context, '/onboarding');
+          }
+          return;
         }
+        if (mounted) Navigator.pushReplacementNamed(context, '/');
+      } else {
+        if (mounted) Navigator.pushReplacementNamed(context, '/onboarding');
       }
     });
+  }
+
+  Future<bool> _verifyWorkerRole() async {
+    try {
+      final data = await ApiService().getMe();
+      final role = data['user']?['role'];
+      return role == 'WORKER' || role == 'ADMIN';
+    } catch (_) {
+      return true;
+    }
   }
 
   @override
@@ -67,29 +82,12 @@ class _SplashScreenState extends State<SplashScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // App icon - gold rounded square with wrench icon
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: const Icon(
-                    Icons.construction_rounded,
-                    size: 40,
-                    color: Colors.white,
-                  ),
+                Image.asset(
+                  'assets/images/doer_logo.png',
+                  width: 180,
+                  height: 180,
                 ),
-                const SizedBox(height: 20),
-                Text(
-                  'Doer',
-                  style: AppTypography.displayLarge.copyWith(
-                    color: AppColors.textPrimary,
-                    letterSpacing: -1,
-                  ),
-                ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 8),
                 Text(
                   'For Workers',
                   style: AppTypography.bodySmall.copyWith(

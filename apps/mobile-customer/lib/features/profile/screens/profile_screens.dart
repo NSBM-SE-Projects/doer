@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/api_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // PROFILE SCREEN
@@ -12,8 +13,50 @@ import '../../../core/services/auth_service.dart';
 //   - Menu sections: Account, Preferences, Support
 //   - Sign out button
 // ──────────────────────────────────────────────────────────────
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool _isLoading = true;
+  String _name = '';
+  String _email = '';
+  String _phone = '';
+  int _totalJobs = 0;
+  int _completedJobs = 0;
+  double _totalSpent = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  Future<void> _fetch() async {
+    try {
+      final data = await ApiService().getMe();
+      final user = data['user'];
+      final jobs = await ApiService().getMyJobs();
+      final jobList = jobs['jobs'] as List;
+      final completedJobs = jobList.where((j) => j['status'] == 'COMPLETED').toList();
+      final totalSpent = completedJobs.fold<double>(0, (sum, j) => sum + ((j['price'] ?? 0) as num).toDouble());
+      setState(() {
+        _name = user['name'] ?? AuthService().currentUser?.displayName ?? '';
+        _email = user['email'] ?? '';
+        _phone = user['phone'] ?? '';
+        _totalJobs = jobList.length;
+        _completedJobs = completedJobs.length;
+        _totalSpent = totalSpent;
+        _isLoading = false;
+      });
+    } catch (_) {
+      _name = AuthService().currentUser?.displayName ?? '';
+      _email = AuthService().currentUser?.email ?? '';
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +87,7 @@ class ProfileScreen extends StatelessWidget {
                       CircleAvatar(
                         radius: 44,
                         backgroundColor: AppColors.surfaceVariant,
-                        child: Text('A',
+                        child: Text(_name.isNotEmpty ? _name[0].toUpperCase() : '?',
                             style: AppTypography.displayLarge
                                 .copyWith(color: AppColors.primary)),
                       ),
@@ -67,12 +110,12 @@ class ProfileScreen extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Text('Ashen Edirisinghe',
+                  Text(_name,
                       style: AppTypography.displaySmall),
                   const SizedBox(height: 4),
-                  Text('ashen@email.com', style: AppTypography.bodySmall),
+                  Text(_email, style: AppTypography.bodySmall),
                   const SizedBox(height: 2),
-                  Text('+94 77 123 4567', style: AppTypography.bodySmall),
+                  Text(_phone.isNotEmpty ? _phone : 'Not set', style: AppTypography.bodySmall),
                 ],
               ),
             ),
@@ -89,13 +132,13 @@ class ProfileScreen extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  _StatColumn(value: '12', label: 'Jobs Posted',
+                  _StatColumn(value: '$_totalJobs', label: 'Jobs Posted',
                       color: AppColors.primary),
                   Container(width: 1, height: 36, color: AppColors.border),
-                  _StatColumn(value: '9', label: 'Completed',
+                  _StatColumn(value: '$_completedJobs', label: 'Completed',
                       color: AppColors.success),
                   Container(width: 1, height: 36, color: AppColors.border),
-                  _StatColumn(value: 'Rs. 45k', label: 'Total Spent',
+                  _StatColumn(value: _totalSpent >= 1000 ? 'Rs. ${(_totalSpent / 1000).toStringAsFixed(1)}k' : 'Rs. ${_totalSpent.toStringAsFixed(0)}', label: 'Total Spent',
                       color: AppColors.textPrimary),
                 ],
               ),
@@ -106,13 +149,19 @@ class ProfileScreen extends StatelessWidget {
             // Account menu
             _MenuSection(title: 'Account', items: [
               _MenuItem(icon: Icons.person_outline_rounded,
-                  label: 'Edit Profile', onTap: () {}),
+                  label: 'Edit Profile', onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Coming soon')),
+                    );
+                  }),
               _MenuItem(icon: Icons.location_on_outlined,
                   label: 'Saved Addresses', onTap: () {}),
               _MenuItem(icon: Icons.payment_outlined,
                   label: 'Payment Methods', onTap: () {}),
               _MenuItem(icon: Icons.receipt_long_outlined,
-                  label: 'Payment History', onTap: () {}),
+                  label: 'Payment History', onTap: () {
+                    Navigator.pushNamed(context, '/payment-history');
+                  }),
             ]),
 
             const SizedBox(height: 16),
@@ -122,7 +171,9 @@ class ProfileScreen extends StatelessWidget {
               _MenuItem(icon: Icons.language_rounded,
                   label: 'Language', trailing: 'English', onTap: () {}),
               _MenuItem(icon: Icons.notifications_outlined,
-                  label: 'Notifications', onTap: () {}),
+                  label: 'Notifications', onTap: () {
+                    Navigator.pushNamed(context, '/notifications');
+                  }),
               _MenuItem(icon: Icons.dark_mode_outlined,
                   label: 'Appearance', trailing: 'Light', onTap: () {}),
             ]),

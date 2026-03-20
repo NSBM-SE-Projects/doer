@@ -4,6 +4,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
+import 'core/services/auth_service.dart';
+import 'core/services/api_service.dart';
+import 'core/services/socket_service.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'core/services/notification_service.dart';
 
 /// Removes the stretching/glow overscroll effect on all scrollables.
 class NoStretchScrollBehavior extends ScrollBehavior {
@@ -17,16 +22,22 @@ class NoStretchScrollBehavior extends ScrollBehavior {
   }
 }
 
-// ──────────────────────────────────────────────────────────────
-// MAIN ENTRY POINT (Worker App)
-// Initializes Firebase before runApp, then starts at SplashScreen.
-// ──────────────────────────────────────────────────────────────
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Set up background message handler
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  // Restore sessions and connect real-time services
+  await ApiService().init();
+  await AuthService().init();
+  await SocketService().connect();
+  await NotificationService().init();
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(

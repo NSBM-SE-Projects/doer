@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/api_service.dart';
 
-// ──────────────────────────────────────────────────────────────
-// SPLASH SCREEN (with Firebase Auth check)
-// Shows logo for 2 seconds, then:
-//   - If user is logged in → go to home
-//   - If not → go to onboarding
-// ──────────────────────────────────────────────────────────────
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -20,7 +15,6 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _controller;
   late Animation<double> _fadeIn;
   late Animation<double> _scale;
-  final _authService = AuthService();
 
   @override
   void initState() {
@@ -37,18 +31,37 @@ class _SplashScreenState extends State<SplashScreen>
     );
     _controller.forward();
 
-    // After 2 seconds, check auth state and navigate
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        if (_authService.currentUser != null) {
-          // User is logged in → go to home
-          Navigator.pushReplacementNamed(context, '/');
-        } else {
-          // Not logged in → go to onboarding
-          Navigator.pushReplacementNamed(context, '/onboarding');
+    Future.delayed(const Duration(seconds: 2), () async {
+      if (!mounted) return;
+      final user = AuthService().currentUser;
+      if (user != null) {
+        // Verify the user has a CUSTOMER role
+        final allowed = await _verifyCustomerRole();
+        if (!allowed && mounted) {
+          await AuthService().signOut();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('This app is for customers only. Please use the Worker app.')),
+            );
+            Navigator.pushReplacementNamed(context, '/onboarding');
+          }
+          return;
         }
+        if (mounted) Navigator.pushReplacementNamed(context, '/');
+      } else {
+        if (mounted) Navigator.pushReplacementNamed(context, '/onboarding');
       }
     });
+  }
+
+  Future<bool> _verifyCustomerRole() async {
+    try {
+      final data = await ApiService().getMe();
+      final role = data['user']?['role'];
+      return role == 'CUSTOMER' || role == 'ADMIN';
+    } catch (_) {
+      return true;
+    }
   }
 
   @override
@@ -69,28 +82,12 @@ class _SplashScreenState extends State<SplashScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: const Icon(
-                    Icons.home_repair_service_rounded,
-                    size: 40,
-                    color: Colors.white,
-                  ),
+                Image.asset(
+                  'assets/images/doer_logo.png',
+                  width: 180,
+                  height: 180,
                 ),
-                const SizedBox(height: 20),
-                Text(
-                  'Doer',
-                  style: AppTypography.displayLarge.copyWith(
-                    color: AppColors.textPrimary,
-                    letterSpacing: -1,
-                  ),
-                ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 8),
                 Text(
                   'Home services, done right.',
                   style: AppTypography.bodySmall.copyWith(

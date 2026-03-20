@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/api_service.dart';
+import '../../messaging/screens/messaging_screens.dart';
 
 // ──────────────────────────────────────────────────────────────
 // JOB DETAIL SCREEN
@@ -23,21 +24,36 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
 
   Future<void> _applyToJob() async {
     setState(() => _applying = true);
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (mounted) {
-      setState(() {
-        _applying = false;
-        _applied = true;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Application sent for "${widget.job.title}"'),
-          backgroundColor: AppColors.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
+    try {
+      await ApiService().applyToJob(widget.job.id);
+      if (mounted) {
+        setState(() {
+          _applying = false;
+          _applied = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Application sent for "${widget.job.title}"'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _applying = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ApiService.errorMessage(e)),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
     }
   }
 
@@ -209,15 +225,33 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                             ],
                           ),
                         ),
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceVariant,
-                            borderRadius: BorderRadius.circular(10),
+                        GestureDetector(
+                          onTap: () {
+                            final s = job.status?.toUpperCase();
+                            if (s == 'ASSIGNED' || s == 'IN_PROGRESS' || s == 'COMPLETED') {
+                              Navigator.push(context, MaterialPageRoute(
+                                builder: (_) => ChatScreen(
+                                  jobId: job.id,
+                                  clientName: job.clientName,
+                                  jobTitle: job.title,
+                                ),
+                              ));
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('You can message the client after your application is accepted.')),
+                              );
+                            }
+                          },
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceVariant,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.chat_bubble_outline_rounded,
+                                size: 16, color: AppColors.textSecondary),
                           ),
-                          child: const Icon(Icons.chat_bubble_outline_rounded,
-                              size: 16, color: AppColors.textSecondary),
                         ),
                       ],
                     ),
@@ -319,7 +353,16 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                           bottom: 10,
                           right: 10,
                           child: GestureDetector(
-                            onTap: () {},
+                            onTap: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Location: ${job.address}'),
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  margin: const EdgeInsets.all(16),
+                                ),
+                              );
+                            },
                             child: Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 6),
@@ -444,6 +487,7 @@ class JobDetailData {
   final String scheduledDate;
   final String address;
   final String? estimatedDuration;
+  final String? status;
 
   const JobDetailData({
     required this.id,
@@ -460,60 +504,7 @@ class JobDetailData {
     required this.scheduledDate,
     required this.address,
     this.estimatedDuration,
+    this.status,
   });
 }
 
-// Sample data used for navigation from BrowseJobsScreen / Dashboard
-final kSampleJobs = [
-  JobDetailData(
-    id: '1',
-    title: 'Fix bathroom tiles',
-    category: 'Plumbing',
-    categoryIcon: '🔧',
-    budget: 'Rs. 3,200',
-    distanceKm: 1.1,
-    postedAt: '5 min ago',
-    clientName: 'Nimal Jayawardena',
-    clientRating: 4.7,
-    clientJobsPosted: 12,
-    description:
-        'Two bathroom tiles near the shower have cracked and need replacing. The grout around the entire shower area also needs re-sealing. Please bring materials — I will reimburse the cost. Prefer someone who can finish in one visit.',
-    scheduledDate: 'Today, 2:00 PM',
-    address: 'No. 14, Galle Road, Nugegoda, Colombo 10250',
-    estimatedDuration: '2–3 hours',
-  ),
-  JobDetailData(
-    id: '2',
-    title: 'Install ceiling fan',
-    category: 'Electrical',
-    categoryIcon: '⚡',
-    budget: 'Rs. 2,000',
-    distanceKm: 2.3,
-    postedAt: '15 min ago',
-    clientName: 'Priya Fernando',
-    clientRating: 4.9,
-    clientJobsPosted: 7,
-    description:
-        'Need a ceiling fan installed in the master bedroom. The fan is already purchased (52-inch, brand new). Wiring point exists on the ceiling. No ladder provided — please bring your own.',
-    scheduledDate: 'Tomorrow, 9:00 AM',
-    address: '22/B, High Level Road, Maharagama, Colombo 10280',
-    estimatedDuration: '1–2 hours',
-  ),
-  JobDetailData(
-    id: '3',
-    title: 'Deep clean 3-bedroom house',
-    category: 'Cleaning',
-    categoryIcon: '🧹',
-    budget: 'Rs. 5,000',
-    distanceKm: 3.8,
-    postedAt: '30 min ago',
-    clientName: 'Amali Senanayake',
-    clientRating: 4.5,
-    clientJobsPosted: 3,
-    description:
-        'Full deep clean required after moving out. 3 bedrooms, 2 bathrooms, kitchen, and living area. Windows, fans, cabinets — everything. Cleaning products will be provided.',
-    scheduledDate: 'Saturday, Mar 22 · 8:00 AM',
-    address: '5, Flower Road, Kottawa, Colombo 10230',
-    estimatedDuration: '4–6 hours',
-  ),
-];

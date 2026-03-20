@@ -1,101 +1,86 @@
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'api_service.dart';
 
-// ──────────────────────────────────────────────────────────────
-// AUTH SERVICE
-// Wraps Firebase Auth into simple methods our screens can call.
-// Methods:
-//   - signUp: create account with email + password
-//   - signIn: login with email + password
-//   - signOut: logout
-//   - resetPassword: send reset email
-//   - currentUser: get logged in user (null if not logged in)
-//   - authStateChanges: stream that fires when login state changes
-// ──────────────────────────────────────────────────────────────
+class AuthUser {
+  final String email;
+  final String? displayName;
+
+  const AuthUser({required this.email, this.displayName});
+}
+
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  static final AuthService _instance = AuthService._internal();
+  factory AuthService() => _instance;
+  AuthService._internal();
 
-  // Get current logged in user (null if not logged in)
-  User? get currentUser => _auth.currentUser;
+  AuthUser? _currentUser;
+  AuthUser? get currentUser => _currentUser;
 
-  // Stream that emits whenever auth state changes (login/logout)
-  // Used in splash screen to decide: go to home or go to login
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  Future<void> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    final email = prefs.getString('c_email');
+    if (email != null) {
+      _currentUser = AuthUser(
+        email: email,
+        displayName: prefs.getString('c_name'),
+      );
+    }
+  }
 
-  // ── Sign Up with email & password ──
-  // Returns the User on success, throws error message on failure
-  Future<User?> signUp({
+  Future<AuthUser?> signUp({
     required String email,
     required String password,
     required String name,
   }) async {
     try {
-      final credential = await _auth.createUserWithEmailAndPassword(
+      await ApiService().register(
         email: email,
         password: password,
+        name: name,
       );
-
-      // Set the display name after creating the account
-      await credential.user?.updateDisplayName(name);
-      await credential.user?.reload();
-
-      return _auth.currentUser;
-    } on FirebaseAuthException catch (e) {
-      throw _getErrorMessage(e.code);
+      _currentUser = AuthUser(email: email, displayName: name);
+      await _saveSession(email, name);
+      return _currentUser;
+    } catch (e) {
+      throw ApiService.errorMessage(e);
     }
   }
 
-  // ── Sign In with email & password ──
-  Future<User?> signIn({
+  Future<AuthUser?> signIn({
     required String email,
     required String password,
   }) async {
     try {
-      final credential = await _auth.signInWithEmailAndPassword(
+      final resp = await ApiService().login(
         email: email,
         password: password,
       );
-      return credential.user;
-    } on FirebaseAuthException catch (e) {
-      throw _getErrorMessage(e.code);
+      final user = resp['user'];
+      final name = user?['name'] ?? email.split('@').first;
+      _currentUser = AuthUser(email: email, displayName: name);
+      await _saveSession(email, name);
+      return _currentUser;
+    } catch (e) {
+      throw ApiService.errorMessage(e);
     }
   }
 
-  // ── Sign Out ──
   Future<void> signOut() async {
-    await _auth.signOut();
+    _currentUser = null;
+    await ApiService().logout();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('c_email');
+    await prefs.remove('c_name');
   }
 
-  // ── Reset Password ──
-  // Sends a password reset email to the given address
   Future<void> resetPassword({required String email}) async {
-    try {
-      await _auth.sendPasswordResetEmail(email: email);
-    } on FirebaseAuthException catch (e) {
-      throw _getErrorMessage(e.code);
-    }
+    // Password reset requires backend endpoint (not yet implemented)
+    throw 'Password reset is not available yet. Please contact support.';
   }
 
-  // ── Convert Firebase error codes to user-friendly messages ──
-  String _getErrorMessage(String code) {
-    switch (code) {
-      case 'email-already-in-use':
-        return 'This email is already registered. Try signing in.';
-      case 'invalid-email':
-        return 'Please enter a valid email address.';
-      case 'weak-password':
-        return 'Password is too weak. Use at least 6 characters.';
-      case 'user-not-found':
-        return 'No account found with this email.';
-      case 'wrong-password':
-        return 'Incorrect password. Please try again.';
-      case 'user-disabled':
-        return 'This account has been disabled.';
-      case 'too-many-requests':
-        return 'Too many attempts. Please try again later.';
-      case 'invalid-credential':
-        return 'Invalid email or password.';
-      default:
-        return 'Something went wrong. Please try again.';
-    }
+  Future<void> _saveSession(String email, String? name) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('c_email', email);
+    if (name != null) await prefs.setString('c_name', name);
   }
 }

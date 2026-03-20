@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../../core/services/api_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 
@@ -13,7 +15,8 @@ import '../../../core/widgets/common_widgets.dart';
 //   5. Pay button → success bottom sheet
 // ──────────────────────────────────────────────────────────────
 class PaymentScreen extends StatefulWidget {
-  const PaymentScreen({super.key});
+  final String jobId;
+  const PaymentScreen({super.key, required this.jobId});
 
   @override
   State<PaymentScreen> createState() => _PaymentScreenState();
@@ -21,9 +24,84 @@ class PaymentScreen extends StatefulWidget {
 
 class _PaymentScreenState extends State<PaymentScreen> {
   String _selectedMethod = 'card';
+  bool _loading = true;
+  bool _paying = false;
+  String? _error;
+  Map<String, dynamic>? _job;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchJob();
+  }
+
+  Future<void> _fetchJob() async {
+    try {
+      final job = await ApiService().getJob(widget.jobId);
+      setState(() {
+        _job = job;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = ApiService.errorMessage(e);
+        _loading = false;
+      });
+    }
+  }
+
+  String _formatPrice(dynamic price) {
+    if (price == null) return 'Rs. 0';
+    final num amount = price is num ? price : num.tryParse(price.toString()) ?? 0;
+    final formatter = NumberFormat('#,###', 'en_US');
+    return 'Rs. ${formatter.format(amount)}';
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: const Text('Make Payment'),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null || _job == null) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: const Text('Make Payment'),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_error ?? 'Failed to load job', style: AppTypography.bodyMedium),
+              const SizedBox(height: 12),
+              TextButton(onPressed: () { setState(() { _loading = true; _error = null; }); _fetchJob(); }, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final jobTitle = _job!['title'] ?? 'Untitled Job';
+    final workerProfile = _job!['worker'];
+    final workerUser = workerProfile?['user'];
+    final workerName = workerUser?['name'] ?? 'Unknown Worker';
+    final price = _job!['price'];
+    final priceStr = _formatPrice(price);
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -66,9 +144,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Fix kitchen sink leak',
+                            Text(jobTitle,
                                 style: AppTypography.headlineSmall),
-                            Text('Saman Fernando',
+                            Text(workerName,
                                 style: AppTypography.bodySmall),
                           ],
                         ),
@@ -78,7 +156,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   const SizedBox(height: 16),
                   const Divider(color: AppColors.borderLight),
                   const SizedBox(height: 12),
-                  _PriceRow(label: 'Service Fee', value: 'Rs. 4,500'),
+                  _PriceRow(label: 'Service Fee', value: priceStr),
                   const SizedBox(height: 8),
                   _PriceRow(
                       label: 'Platform Fee', value: 'Rs. 0', isFree: true),
@@ -91,7 +169,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('Total', style: AppTypography.headlineMedium),
-                      Text('Rs. 4,500',
+                      Text(priceStr,
                           style: AppTypography.headlineLarge
                               .copyWith(color: AppColors.primary)),
                     ],
@@ -209,16 +287,32 @@ class _PaymentScreenState extends State<PaymentScreen> {
           border: Border(top: BorderSide(color: AppColors.borderLight)),
         ),
         child: DoerButton(
-          label: 'Pay Rs. 4,500',
+          label: 'Pay $priceStr',
           icon: Icons.lock_rounded,
-          onPressed: () => _showPaymentSuccess(context),
+          onPressed: _paying ? null : () => _handlePay(context, priceStr),
         ),
       ),
     );
   }
 
+  // Call API to create payment, then show success
+  Future<void> _handlePay(BuildContext ctx, String priceStr) async {
+    setState(() => _paying = true);
+    try {
+      await ApiService().createPayment(widget.jobId);
+      if (!ctx.mounted) return;
+      _showPaymentSuccess(ctx, priceStr);
+    } catch (e) {
+      if (!ctx.mounted) return;
+      setState(() => _paying = false);
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        SnackBar(content: Text(ApiService.errorMessage(e))),
+      );
+    }
+  }
+
   // Success bottom sheet after payment
-  void _showPaymentSuccess(BuildContext context) {
+  void _showPaymentSuccess(BuildContext context, String priceStr) {
     showModalBottomSheet(
       context: context,
       isDismissible: false,
@@ -247,7 +341,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 style: AppTypography.displaySmall),
             const SizedBox(height: 8),
             Text(
-              'Rs. 4,500 has been securely held in escrow.\nIt will be released once you confirm job completion.',
+              '$priceStr has been securely held in escrow.\nIt will be released once you confirm job completion.',
               style: AppTypography.bodyMedium.copyWith(
                   color: AppColors.textSecondary, height: 1.6),
               textAlign: TextAlign.center,
@@ -394,11 +488,102 @@ class _PaymentMethodTile extends StatelessWidget {
 // Shows spending summary card + monthly grouped transactions.
 // Each transaction shows status: Completed, In Escrow, or Refunded.
 // ──────────────────────────────────────────────────────────────
-class PaymentHistoryScreen extends StatelessWidget {
+class PaymentHistoryScreen extends StatefulWidget {
   const PaymentHistoryScreen({super.key});
 
   @override
+  State<PaymentHistoryScreen> createState() => _PaymentHistoryScreenState();
+}
+
+class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
+  bool _loading = true;
+  String? _error;
+  List<dynamic> _payments = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPayments();
+  }
+
+  Future<void> _fetchPayments() async {
+    try {
+      final payments = await ApiService().getMyPayments();
+      setState(() {
+        _payments = payments;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = ApiService.errorMessage(e);
+        _loading = false;
+      });
+    }
+  }
+
+  String _formatPrice(dynamic price) {
+    if (price == null) return 'Rs. 0';
+    final num amount = price is num ? price : num.tryParse(price.toString()) ?? 0;
+    final formatter = NumberFormat('#,###', 'en_US');
+    return 'Rs. ${formatter.format(amount)}';
+  }
+
+  String _mapStatus(String? status) {
+    switch (status?.toUpperCase()) {
+      case 'COMPLETED':
+        return 'Completed';
+      case 'HELD':
+      case 'ESCROW':
+      case 'PENDING':
+        return 'In Escrow';
+      case 'REFUNDED':
+        return 'Refunded';
+      default:
+        return status ?? 'Unknown';
+    }
+  }
+
+  Color _statusColor(String displayStatus) {
+    switch (displayStatus) {
+      case 'Completed':
+        return AppColors.success;
+      case 'In Escrow':
+        return AppColors.warning;
+      case 'Refunded':
+        return AppColors.error;
+      default:
+        return AppColors.textSecondary;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // Calculate total from completed payments
+    num totalSpent = 0;
+    int completedCount = 0;
+    for (final p in _payments) {
+      final status = _mapStatus(p['status']);
+      if (status == 'Completed') {
+        final price = p['amount'] ?? p['price'] ?? 0;
+        totalSpent += price is num ? price : (num.tryParse(price.toString()) ?? 0);
+        completedCount++;
+      }
+    }
+
+    // Group payments by month/year
+    final Map<String, List<dynamic>> grouped = {};
+    final dateFormat = DateFormat('MMMM yyyy');
+    final dayFormat = DateFormat('MMM d');
+    for (final p in _payments) {
+      final rawDate = p['createdAt'] ?? p['paidAt'];
+      DateTime? dt;
+      if (rawDate != null) {
+        dt = DateTime.tryParse(rawDate.toString());
+      }
+      final key = dt != null ? dateFormat.format(dt) : 'Unknown';
+      grouped.putIfAbsent(key, () => []).add(p);
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -408,80 +593,96 @@ class PaymentHistoryScreen extends StatelessWidget {
         ),
         title: const Text('Payment History'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          // Total spending card
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Total Spent',
-                    style: AppTypography.bodySmall
-                        .copyWith(color: Colors.white.withValues(alpha: 0.7))),
-                const SizedBox(height: 4),
-                Text('Rs. 45,500',
-                    style: AppTypography.displayLarge
-                        .copyWith(color: Colors.white)),
-                const SizedBox(height: 4),
-                Text('9 completed transactions',
-                    style: AppTypography.labelSmall
-                        .copyWith(color: Colors.white.withValues(alpha: 0.7))),
-              ],
-            ),
-          ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_error!, style: AppTypography.bodyMedium),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: () {
+                          setState(() { _loading = true; _error = null; });
+                          _fetchPayments();
+                        },
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    // Total spending card
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Total Spent',
+                              style: AppTypography.bodySmall
+                                  .copyWith(color: Colors.white.withValues(alpha: 0.7))),
+                          const SizedBox(height: 4),
+                          Text(_formatPrice(totalSpent),
+                              style: AppTypography.displayLarge
+                                  .copyWith(color: Colors.white)),
+                          const SizedBox(height: 4),
+                          Text('$completedCount completed transaction${completedCount == 1 ? '' : 's'}',
+                              style: AppTypography.labelSmall
+                                  .copyWith(color: Colors.white.withValues(alpha: 0.7))),
+                        ],
+                      ),
+                    ),
 
-          const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
-          Text('March 2026', style: AppTypography.labelMedium),
-          const SizedBox(height: 12),
-          _TransactionItem(
-              title: 'Fix kitchen sink leak',
-              worker: 'Saman Fernando',
-              amount: 'Rs. 4,500',
-              date: 'Mar 19',
-              status: 'In Escrow',
-              statusColor: AppColors.warning),
-          _TransactionItem(
-              title: 'Rewire living room',
-              worker: 'Nimal Perera',
-              amount: 'Rs. 12,000',
-              date: 'Mar 15',
-              status: 'Completed',
-              statusColor: AppColors.success),
-          _TransactionItem(
-              title: 'Deep clean apartment',
-              worker: 'Kumari Silva',
-              amount: 'Rs. 8,000',
-              date: 'Mar 8',
-              status: 'Completed',
-              statusColor: AppColors.success),
+                    if (_payments.isEmpty)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Text('No payments yet', style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                        ),
+                      ),
 
-          const SizedBox(height: 20),
-
-          Text('February 2026', style: AppTypography.labelMedium),
-          const SizedBox(height: 12),
-          _TransactionItem(
-              title: 'Paint bedroom walls',
-              worker: 'Ruwan Jayasinghe',
-              amount: 'Rs. 15,000',
-              date: 'Feb 22',
-              status: 'Completed',
-              statusColor: AppColors.success),
-          _TransactionItem(
-              title: 'Garden maintenance',
-              worker: 'Priya Rajapaksa',
-              amount: 'Rs. 6,000',
-              date: 'Feb 10',
-              status: 'Refunded',
-              statusColor: AppColors.error),
-        ],
-      ),
+                    ...grouped.entries.expand((entry) {
+                      return [
+                        Text(entry.key, style: AppTypography.labelMedium),
+                        const SizedBox(height: 12),
+                        ...entry.value.map((p) {
+                          final job = p['job'];
+                          final title = job?['title'] ?? 'Untitled Job';
+                          final workerProfile = job?['worker'];
+                          final workerUser = workerProfile?['user'];
+                          final worker = workerUser?['name'] ?? 'Unknown Worker';
+                          final amount = _formatPrice(p['amount'] ?? p['price']);
+                          final rawDate = p['createdAt'] ?? p['paidAt'];
+                          DateTime? dt;
+                          if (rawDate != null) {
+                            dt = DateTime.tryParse(rawDate.toString());
+                          }
+                          final date = dt != null ? dayFormat.format(dt) : '';
+                          final displayStatus = _mapStatus(p['status']);
+                          final color = _statusColor(displayStatus);
+                          return _TransactionItem(
+                            title: title,
+                            worker: worker,
+                            amount: amount,
+                            date: date,
+                            status: displayStatus,
+                            statusColor: color,
+                          );
+                        }),
+                        const SizedBox(height: 20),
+                      ];
+                    }),
+                  ],
+                ),
     );
   }
 }

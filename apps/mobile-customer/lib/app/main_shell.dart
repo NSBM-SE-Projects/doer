@@ -23,14 +23,14 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
+  int _messagesRefreshKey = 0;
 
-  // Screens for each tab (index 2 is placeholder for FAB)
-  final _screens = const [
-    HomeScreen(),
-    MyJobsScreen(),
-    SizedBox(), // placeholder — FAB opens PostJobScreen
-    ConversationsScreen(),
-    ProfileScreen(),
+  List<Widget> get _screens => [
+    const HomeScreen(),
+    const MyJobsScreen(),
+    const SizedBox(), // placeholder — FAB opens PostJobScreen
+    ConversationsScreen(key: ValueKey('msgs_$_messagesRefreshKey')),
+    const ProfileScreen(),
   ];
 
   @override
@@ -100,8 +100,10 @@ class _MainShellState extends State<MainShell> {
                   activeIcon: Icons.chat_bubble_rounded,
                   label: 'Messages',
                   isActive: _currentIndex == 3,
-                  badge: 2,
-                  onTap: () => setState(() => _currentIndex = 3),
+                  onTap: () => setState(() {
+                    _currentIndex = 3;
+                    _messagesRefreshKey++;
+                  }),
                 ),
                 _NavItem(
                   icon: Icons.person_outline_rounded,

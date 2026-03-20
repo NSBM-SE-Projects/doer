@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/api_service.dart';
 
 // ──────────────────────────────────────────────────────────────
 // WORKER PROFILE SCREEN
@@ -16,11 +17,159 @@ import '../../../core/widgets/common_widgets.dart';
 //   7. Reviews list
 //   8. "Book This Worker" button at bottom
 // ──────────────────────────────────────────────────────────────
-class WorkerProfileScreen extends StatelessWidget {
-  const WorkerProfileScreen({super.key});
+class WorkerProfileScreen extends StatefulWidget {
+  final String workerId;
+  const WorkerProfileScreen({super.key, required this.workerId});
+
+  @override
+  State<WorkerProfileScreen> createState() => _WorkerProfileScreenState();
+}
+
+class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
+  Map<String, dynamic>? _worker;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchWorker();
+  }
+
+  Future<void> _fetchWorker() async {
+    try {
+      final data = await ApiService().getWorker(widget.workerId);
+      if (mounted) {
+        setState(() {
+          _worker = data;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = ApiService.errorMessage(e);
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  String _badgeFromVerification(String? status) {
+    switch (status) {
+      case 'PLATINUM':
+        return BadgeLevel.platinum;
+      case 'GOLD':
+        return BadgeLevel.gold;
+      case 'SILVER':
+        return BadgeLevel.silver;
+      case 'BRONZE':
+        return BadgeLevel.bronze;
+      default:
+        return BadgeLevel.trainee;
+    }
+  }
+
+  Color _badgeColor(String badge) {
+    switch (badge) {
+      case BadgeLevel.platinum:
+        return AppColors.badgePlatinum;
+      case BadgeLevel.gold:
+        return AppColors.badgeGold;
+      case BadgeLevel.silver:
+        return AppColors.badgeSilver;
+      case BadgeLevel.bronze:
+        return AppColors.badgeBronze;
+      default:
+        return AppColors.textTertiary;
+    }
+  }
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final date = DateTime.parse(dateStr);
+      final months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      return '${months[date.month - 1]} ${date.day}, ${date.year}';
+    } catch (_) {
+      return dateStr;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(backgroundColor: AppColors.background),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null || _worker == null) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(backgroundColor: AppColors.background),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                const SizedBox(height: 16),
+                Text(
+                  _error ?? 'Failed to load worker profile',
+                  style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                DoerButton(
+                  label: 'Retry',
+                  onPressed: () {
+                    setState(() {
+                      _loading = true;
+                      _error = null;
+                    });
+                    _fetchWorker();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final w = _worker!;
+    final user = w['user'] as Map<String, dynamic>? ?? {};
+    final name = (user['name'] as String?) ?? 'Unknown';
+    final avatarUrl = user['avatarUrl'] as String?;
+    final bio = (w['bio'] as String?) ?? '';
+    final rating = (w['rating'] as num?)?.toDouble() ?? 0.0;
+    final totalJobs = (w['totalJobs'] as num?)?.toInt() ?? 0;
+    final verificationStatus = w['verificationStatus'] as String?;
+    final isAvailable = w['isAvailable'] as bool? ?? false;
+    final categories = (w['categories'] as List<dynamic>?) ?? [];
+    final reviews = (w['reviews'] as List<dynamic>?) ?? [];
+
+    final badge = _badgeFromVerification(verificationStatus);
+    final badgeColor = _badgeColor(badge);
+    final badgeLabel = '${BadgeLevel.label(badge)} Verified Worker';
+
+    final categoryNames = categories
+        .map((c) {
+          final cat = c['category'] as Map<String, dynamic>?;
+          return cat?['name'] as String? ?? '';
+        })
+        .where((n) => n.isNotEmpty)
+        .toList();
+
+    final firstCategory = categoryNames.isNotEmpty ? categoryNames.first : '';
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: CustomScrollView(
@@ -48,29 +197,39 @@ class WorkerProfileScreen extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    CircleAvatar(
-                      radius: 44,
-                      backgroundColor: AppColors.surface,
-                      child: Text('N',
-                          style: AppTypography.displayLarge
-                              .copyWith(color: AppColors.primary)),
-                    ),
+                    avatarUrl != null && avatarUrl.isNotEmpty
+                        ? CircleAvatar(
+                            radius: 44,
+                            backgroundImage: NetworkImage(avatarUrl),
+                            backgroundColor: AppColors.surface,
+                          )
+                        : CircleAvatar(
+                            radius: 44,
+                            backgroundColor: AppColors.surface,
+                            child: Text(
+                              name.isNotEmpty ? name[0].toUpperCase() : '?',
+                              style: AppTypography.displayLarge
+                                  .copyWith(color: AppColors.primary),
+                            ),
+                          ),
                     const SizedBox(height: 14),
-                    Text('Nimal Perera', style: AppTypography.displaySmall),
+                    Text(name, style: AppTypography.displaySmall),
                     const SizedBox(height: 4),
-                    Text('Electrician · Colombo',
-                        style: AppTypography.bodySmall),
+                    Text(
+                      firstCategory,
+                      style: AppTypography.bodySmall,
+                    ),
                     const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const RatingStars(rating: 4.8, size: 16),
+                        RatingStars(rating: rating, size: 16),
                         const SizedBox(width: 6),
-                        Text('4.8',
+                        Text(rating.toStringAsFixed(1),
                             style: AppTypography.labelMedium
                                 .copyWith(fontWeight: FontWeight.w600)),
                         const SizedBox(width: 4),
-                        Text('(127 reviews)',
+                        Text('(${reviews.length} reviews)',
                             style: AppTypography.bodySmall),
                       ],
                     ),
@@ -90,11 +249,17 @@ class WorkerProfileScreen extends StatelessWidget {
                   // ── 1. Stats ──
                   Row(
                     children: [
-                      _StatCard(label: 'Jobs Done', value: '234'),
+                      _StatCard(label: 'Jobs Done', value: '$totalJobs'),
                       const SizedBox(width: 10),
-                      _StatCard(label: 'Completion', value: '96%'),
+                      _StatCard(
+                        label: 'Rating',
+                        value: rating > 0 ? rating.toStringAsFixed(1) : '-',
+                      ),
                       const SizedBox(width: 10),
-                      _StatCard(label: 'Response', value: '< 5min'),
+                      _StatCard(
+                        label: 'Reviews',
+                        value: '${reviews.length}',
+                      ),
                     ],
                   ),
 
@@ -104,25 +269,27 @@ class WorkerProfileScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.badgeGold.withValues(alpha: 0.08),
+                      color: badgeColor.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                          color: AppColors.badgeGold.withValues(alpha: 0.2)),
+                          color: badgeColor.withValues(alpha: 0.2)),
                     ),
                     child: Row(
                       children: [
                         Icon(Icons.workspace_premium,
-                            color: AppColors.badgeGold, size: 28),
+                            color: badgeColor, size: 28),
                         const SizedBox(width: 14),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Gold Verified Worker',
+                              Text(badgeLabel,
                                   style: AppTypography.headlineSmall),
                               const SizedBox(height: 2),
                               Text(
-                                'Background checked, skills verified, 234+ jobs completed',
+                                totalJobs > 0
+                                    ? '$totalJobs+ jobs completed'
+                                    : 'New worker',
                                 style: AppTypography.bodySmall,
                               ),
                             ],
@@ -135,47 +302,42 @@ class WorkerProfileScreen extends StatelessWidget {
                   const SizedBox(height: 24),
 
                   // ── 3. About ──
-                  Text('About', style: AppTypography.headlineMedium),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Experienced electrician with over 8 years in residential and commercial electrical work. Specialized in wiring, panel upgrades, lighting installation, and troubleshooting. Available throughout the Colombo district.',
-                    style: AppTypography.bodyMedium.copyWith(
-                        color: AppColors.textSecondary, height: 1.6),
-                  ),
-
-                  const SizedBox(height: 24),
+                  if (bio.isNotEmpty) ...[
+                    Text('About', style: AppTypography.headlineMedium),
+                    const SizedBox(height: 10),
+                    Text(
+                      bio,
+                      style: AppTypography.bodyMedium.copyWith(
+                          color: AppColors.textSecondary, height: 1.6),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
 
                   // ── 4. Skills ──
-                  Text('Skills & Services',
-                      style: AppTypography.headlineMedium),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      'Wiring',
-                      'Panel Upgrades',
-                      'Lighting',
-                      'Troubleshooting',
-                      'Fan Installation',
-                      'Socket Repair',
-                    ]
-                        .map((s) => Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: AppColors.surfaceVariant,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child:
-                                  Text(s, style: AppTypography.labelMedium),
-                            ))
-                        .toList(),
-                  ),
+                  if (categoryNames.isNotEmpty) ...[
+                    Text('Skills & Services',
+                        style: AppTypography.headlineMedium),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: categoryNames
+                          .map((s) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceVariant,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child:
+                                    Text(s, style: AppTypography.labelMedium),
+                              ))
+                          .toList(),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
 
-                  const SizedBox(height: 24),
-
-                  // ── 5. Rate + Availability ──
+                  // ── 5. Availability ──
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -189,28 +351,39 @@ class WorkerProfileScreen extends StatelessWidget {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Hourly Rate',
+                            Text('Status',
                                 style: AppTypography.bodySmall),
-                            Text('Rs. 1,500 /hr',
-                                style: AppTypography.headlineLarge),
+                            Text(
+                              isAvailable ? 'Available' : 'Unavailable',
+                              style: AppTypography.headlineLarge,
+                            ),
                           ],
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: AppColors.successLight,
+                            color: isAvailable
+                                ? AppColors.successLight
+                                : AppColors.surfaceVariant,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.circle,
-                                  size: 8, color: AppColors.success),
+                              Icon(Icons.circle,
+                                  size: 8,
+                                  color: isAvailable
+                                      ? AppColors.success
+                                      : AppColors.textTertiary),
                               const SizedBox(width: 6),
-                              Text('Available Now',
-                                  style: AppTypography.labelSmall.copyWith(
-                                      color: AppColors.success,
-                                      fontWeight: FontWeight.w600)),
+                              Text(
+                                isAvailable ? 'Available Now' : 'Busy',
+                                style: AppTypography.labelSmall.copyWith(
+                                    color: isAvailable
+                                        ? AppColors.success
+                                        : AppColors.textTertiary,
+                                    fontWeight: FontWeight.w600),
+                              ),
                             ],
                           ),
                         ),
@@ -230,7 +403,7 @@ class WorkerProfileScreen extends StatelessWidget {
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       itemCount: 5,
-                      separatorBuilder: (_, _) =>
+                      separatorBuilder: (_, __) =>
                           const SizedBox(width: 10),
                       itemBuilder: (_, i) => Container(
                         width: 120,
@@ -252,24 +425,38 @@ class WorkerProfileScreen extends StatelessWidget {
 
                   // ── 7. Reviews ──
                   SectionHeader(
-                      title: 'Reviews (127)',
-                      actionText: 'See all',
+                      title: 'Reviews (${reviews.length})',
+                      actionText: reviews.length > 2 ? 'See all' : null,
                       onAction: () {}),
-                  _ReviewCard(
-                    name: 'Ashen D.',
-                    rating: 5,
-                    date: 'Mar 15, 2026',
-                    text:
-                        'Excellent work! Nimal fixed our electrical issues quickly and professionally.',
-                  ),
-                  const SizedBox(height: 12),
-                  _ReviewCard(
-                    name: 'Kavinda S.',
-                    rating: 4,
-                    date: 'Mar 10, 2026',
-                    text:
-                        'Good job overall. Was a bit late but the quality of work was great.',
-                  ),
+                  if (reviews.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Text(
+                        'No reviews yet',
+                        style: AppTypography.bodySmall
+                            .copyWith(color: AppColors.textTertiary),
+                      ),
+                    )
+                  else
+                    ...reviews.take(3).map((r) {
+                      final review = r as Map<String, dynamic>;
+                      final customer = review['customer'] as Map<String, dynamic>?;
+                      final customerUser = customer?['user'] as Map<String, dynamic>?;
+                      final reviewerName = (customerUser?['name'] as String?) ?? 'Anonymous';
+                      final reviewRating = (review['rating'] as num?)?.toInt() ?? 0;
+                      final comment = (review['comment'] as String?) ?? '';
+                      final createdAt = review['createdAt'] as String?;
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _ReviewCard(
+                          name: reviewerName,
+                          rating: reviewRating,
+                          date: _formatDate(createdAt),
+                          text: comment,
+                        ),
+                      );
+                    }),
 
                   const SizedBox(height: 80),
                 ],
@@ -288,7 +475,9 @@ class WorkerProfileScreen extends StatelessWidget {
         child: DoerButton(
           label: 'Book This Worker',
           icon: Icons.calendar_today_outlined,
-          onPressed: () {},
+          onPressed: () {
+            Navigator.pushNamed(context, '/post-job');
+          },
         ),
       ),
     );
@@ -373,10 +562,12 @@ class _ReviewCard extends StatelessWidget {
               RatingStars(rating: rating.toDouble(), size: 14),
             ],
           ),
-          const SizedBox(height: 10),
-          Text(text,
-              style: AppTypography.bodySmall
-                  .copyWith(color: AppColors.textSecondary, height: 1.5)),
+          if (text.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(text,
+                style: AppTypography.bodySmall
+                    .copyWith(color: AppColors.textSecondary, height: 1.5)),
+          ],
         ],
       ),
     );
@@ -388,16 +579,65 @@ class _ReviewCard extends StatelessWidget {
 // List of workers with search bar and filter chips.
 // Filters: Nearest, Top Rated, Gold+, Available Now
 // ──────────────────────────────────────────────────────────────
-class BrowseWorkersScreen extends StatelessWidget {
+class BrowseWorkersScreen extends StatefulWidget {
   final String? categoryFilter;
   const BrowseWorkersScreen({super.key, this.categoryFilter});
+
+  @override
+  State<BrowseWorkersScreen> createState() => _BrowseWorkersScreenState();
+}
+
+class _BrowseWorkersScreenState extends State<BrowseWorkersScreen> {
+  List<dynamic> _workers = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchWorkers();
+  }
+
+  Future<void> _fetchWorkers() async {
+    try {
+      final data = await ApiService().getWorkers();
+      if (mounted) {
+        setState(() {
+          _workers = data;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = ApiService.errorMessage(e);
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  String _badgeFromVerification(String? status) {
+    switch (status) {
+      case 'PLATINUM':
+        return BadgeLevel.platinum;
+      case 'GOLD':
+        return BadgeLevel.gold;
+      case 'SILVER':
+        return BadgeLevel.silver;
+      case 'BRONZE':
+        return BadgeLevel.bronze;
+      default:
+        return BadgeLevel.trainee;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(categoryFilter ?? 'Browse Workers'),
+        title: Text(widget.categoryFilter ?? 'Browse Workers'),
       ),
       body: Column(
         children: [
@@ -430,52 +670,90 @@ class BrowseWorkersScreen extends StatelessWidget {
           const SizedBox(height: 12),
           // Worker list
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              children: [
-                WorkerCard(
-                  name: 'Nimal Perera',
-                  skill: 'Electrician',
-                  badge: BadgeLevel.gold,
-                  rating: 4.8,
-                  distance: 2.1,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const WorkerProfileScreen()),
-                    );
-                  },
-                ),
-                const SizedBox(height: 12),
-                WorkerCard(
-                  name: 'Saman Fernando',
-                  skill: 'Plumber',
-                  badge: BadgeLevel.silver,
-                  rating: 4.5,
-                  distance: 3.4,
-                  onTap: () {},
-                ),
-                const SizedBox(height: 12),
-                WorkerCard(
-                  name: 'Kumari Silva',
-                  skill: 'House Cleaning',
-                  badge: BadgeLevel.platinum,
-                  rating: 4.9,
-                  distance: 1.8,
-                  onTap: () {},
-                ),
-                const SizedBox(height: 12),
-                WorkerCard(
-                  name: 'Ruwan Jayasinghe',
-                  skill: 'Painter',
-                  badge: BadgeLevel.bronze,
-                  rating: 4.2,
-                  distance: 5.1,
-                  onTap: () {},
-                ),
-              ],
-            ),
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.error_outline,
+                                  size: 48, color: AppColors.error),
+                              const SizedBox(height: 16),
+                              Text(
+                                _error!,
+                                style: AppTypography.bodyMedium
+                                    .copyWith(color: AppColors.textSecondary),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 16),
+                              DoerButton(
+                                label: 'Retry',
+                                onPressed: () {
+                                  setState(() {
+                                    _loading = true;
+                                    _error = null;
+                                  });
+                                  _fetchWorkers();
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : _workers.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No workers found',
+                              style: AppTypography.bodyMedium
+                                  .copyWith(color: AppColors.textTertiary),
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            itemCount: _workers.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (_, index) {
+                              final w = _workers[index] as Map<String, dynamic>;
+                              final user =
+                                  w['user'] as Map<String, dynamic>? ?? {};
+                              final name =
+                                  (user['name'] as String?) ?? 'Unknown';
+                              final rating =
+                                  (w['rating'] as num?)?.toDouble() ?? 0.0;
+                              final verificationStatus =
+                                  w['verificationStatus'] as String?;
+                              final categories =
+                                  (w['categories'] as List<dynamic>?) ?? [];
+                              final firstCategory = categories.isNotEmpty
+                                  ? ((categories.first['category']
+                                          as Map<String, dynamic>?)?['name']
+                                      as String? ?? '')
+                                  : '';
+
+                              return WorkerCard(
+                                name: name,
+                                skill: firstCategory,
+                                badge: _badgeFromVerification(
+                                    verificationStatus),
+                                rating: rating,
+                                distance: 0.0,
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => WorkerProfileScreen(
+                                        workerId: w['id'].toString(),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
           ),
         ],
       ),

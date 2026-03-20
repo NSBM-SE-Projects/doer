@@ -4,20 +4,24 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
+import 'core/services/auth_service.dart';
+import 'core/services/api_service.dart';
+import 'core/services/socket_service.dart';
+import 'core/services/notification_service.dart';
 
-// ──────────────────────────────────────────────────────────────
-// MAIN ENTRY POINT
-// Now with Firebase initialization.
-// Firebase.initializeApp() MUST run before the app starts
-// so auth, messaging, etc. are ready to use.
-// ──────────────────────────────────────────────────────────────
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase before anything else
+  // Initialize Firebase (for FCM push notifications only)
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Restore sessions and connect real-time services
+  await ApiService().init();
+  await AuthService().init();
+  await SocketService().connect();
+  await NotificationService().init();
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
