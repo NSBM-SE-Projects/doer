@@ -7,10 +7,11 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
+import '../core/config/app_config.dart';
 
-// ── CONFIG — change this after Railway deploy ──────────────────
-const String baseUrl = 'https://YOUR-APP.up.railway.app';
-// ──────────────────────────────────────────────────────────────
+// Uses the main backend base URL. ML recommendation endpoints
+// (e.g. /recommend, /bookings/add) require a separate service.
+String get baseUrl => AppConfig.socketUrl;
 
 class LocationService {
   // ── Get device GPS location ──────────────────────────────────

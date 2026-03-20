@@ -1,7 +1,6 @@
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
-
-const _agoraAppId = '31f90299731945e19630e2b96ee78154';
+import '../config/app_config.dart';
 
 /// Manages Agora video call sessions.
 /// Each call uses the jobId as the channel name so both parties join the same room.
@@ -28,7 +27,7 @@ class VideoCallService {
 
     _engine = createAgoraRtcEngine();
     await _engine!.initialize(const RtcEngineContext(
-      appId: _agoraAppId,
+      appId: AppConfig.agoraAppId,
       channelProfile: ChannelProfileType.channelProfileCommunication,
     ));
 

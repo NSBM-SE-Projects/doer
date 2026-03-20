@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:timeago/timeago.dart' as timeago;
+import '../../../core/services/api_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 
@@ -11,7 +13,15 @@ import '../../../core/widgets/common_widgets.dart';
 // Rating label changes: "Tap to rate" → "Could be better" → "Excellent!"
 // ──────────────────────────────────────────────────────────────
 class RateReviewScreen extends StatefulWidget {
-  const RateReviewScreen({super.key});
+  final String jobId;
+  final String workerName;
+  final String jobTitle;
+  const RateReviewScreen({
+    super.key,
+    required this.jobId,
+    required this.workerName,
+    required this.jobTitle,
+  });
 
   @override
   State<RateReviewScreen> createState() => _RateReviewScreenState();
@@ -19,12 +29,34 @@ class RateReviewScreen extends StatefulWidget {
 
 class _RateReviewScreenState extends State<RateReviewScreen> {
   int _rating = 0;
+  bool _submitting = false;
   final _reviewController = TextEditingController();
 
   @override
   void dispose() {
     _reviewController.dispose();
     super.dispose();
+  }
+
+  Future<void> _submitReview() async {
+    setState(() => _submitting = true);
+    try {
+      await ApiService().reviewJob(
+        widget.jobId,
+        rating: _rating,
+        comment: _reviewController.text.trim().isNotEmpty
+            ? _reviewController.text.trim()
+            : null,
+      );
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ApiService.errorMessage(e))),
+      );
+    }
   }
 
   @override
@@ -47,14 +79,15 @@ class _RateReviewScreenState extends State<RateReviewScreen> {
             CircleAvatar(
               radius: 36,
               backgroundColor: AppColors.surfaceVariant,
-              child: Text('S',
+              child: Text(
+                  widget.workerName.isNotEmpty ? widget.workerName[0].toUpperCase() : '?',
                   style: AppTypography.displaySmall
                       .copyWith(color: AppColors.primary)),
             ),
             const SizedBox(height: 14),
-            Text('Saman Fernando', style: AppTypography.headlineLarge),
+            Text(widget.workerName, style: AppTypography.headlineLarge),
             const SizedBox(height: 4),
-            Text('Fix kitchen sink leak', style: AppTypography.bodySmall),
+            Text(widget.jobTitle, style: AppTypography.bodySmall),
 
             const SizedBox(height: 32),
 
@@ -141,8 +174,8 @@ class _RateReviewScreenState extends State<RateReviewScreen> {
 
             // Submit button (disabled until rated)
             DoerButton(
-              label: 'Submit Review',
-              onPressed: _rating > 0 ? () => Navigator.pop(context) : null,
+              label: _submitting ? 'Submitting...' : 'Submit Review',
+              onPressed: _rating > 0 && !_submitting ? _submitReview : null,
             ),
           ],
         ),
@@ -161,8 +194,94 @@ class _RateReviewScreenState extends State<RateReviewScreen> {
 //   - Rate experience (gold star)
 // Unread items have subtle tint + dot indicator.
 // ──────────────────────────────────────────────────────────────
-class NotificationsScreen extends StatelessWidget {
+class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
+
+  @override
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends State<NotificationsScreen> {
+  bool _loading = true;
+  String? _error;
+  List<dynamic> _notifications = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchNotifications();
+  }
+
+  Future<void> _fetchNotifications() async {
+    try {
+      final data = await ApiService().getNotifications();
+      setState(() {
+        _notifications = (data['notifications'] as List?) ?? [];
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = ApiService.errorMessage(e);
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _markAllRead() async {
+    try {
+      await ApiService().markAllNotificationsRead();
+      setState(() {
+        for (var i = 0; i < _notifications.length; i++) {
+          if (_notifications[i] is Map) {
+            _notifications[i] = {..._notifications[i] as Map, 'isRead': true};
+          }
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ApiService.errorMessage(e))),
+      );
+    }
+  }
+
+  Future<void> _markRead(String id, int index) async {
+    try {
+      await ApiService().markNotificationRead(id);
+      setState(() {
+        if (_notifications[index] is Map) {
+          _notifications[index] = {..._notifications[index] as Map, 'isRead': true};
+        }
+      });
+    } catch (_) {}
+  }
+
+  String _timeAgo(String? dateStr) {
+    if (dateStr == null) return '';
+    final dt = DateTime.tryParse(dateStr);
+    if (dt == null) return '';
+    return timeago.format(dt);
+  }
+
+  IconData _iconForTitle(String title) {
+    final lower = title.toLowerCase();
+    if (lower.contains('complet')) return Icons.check_circle_outline_rounded;
+    if (lower.contains('message')) return Icons.chat_bubble_outline_rounded;
+    if (lower.contains('match') || lower.contains('worker')) return Icons.person_add_outlined;
+    if (lower.contains('payment') || lower.contains('escrow')) return Icons.payment_outlined;
+    if (lower.contains('rate') || lower.contains('review')) return Icons.star_outline_rounded;
+    return Icons.notifications_outlined;
+  }
+
+  Color _iconColorForTitle(String title) {
+    final lower = title.toLowerCase();
+    if (lower.contains('complet')) return AppColors.success;
+    if (lower.contains('message')) return AppColors.primary;
+    if (lower.contains('match') || lower.contains('worker')) return AppColors.info;
+    if (lower.contains('payment') || lower.contains('escrow')) return AppColors.warning;
+    if (lower.contains('rate') || lower.contains('review')) return AppColors.badgeGold;
+    return AppColors.textSecondary;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -176,51 +295,64 @@ class NotificationsScreen extends StatelessWidget {
         title: const Text('Notifications'),
         actions: [
           TextButton(
-            onPressed: () {},
+            onPressed: _markAllRead,
             child: Text('Mark all read',
                 style: AppTypography.labelMedium
                     .copyWith(color: AppColors.primary)),
           ),
         ],
       ),
-      body: ListView(
-        children: [
-          _NotifItem(
-              icon: Icons.check_circle_outline_rounded,
-              iconColor: AppColors.success,
-              title: 'Job Completed',
-              subtitle:
-                  'Saman marked "Fix kitchen sink leak" as completed.',
-              time: '5 min ago',
-              unread: true),
-          _NotifItem(
-              icon: Icons.chat_bubble_outline_rounded,
-              iconColor: AppColors.primary,
-              title: 'New Message',
-              subtitle: 'Saman Fernando sent you a message.',
-              time: '15 min ago',
-              unread: true),
-          _NotifItem(
-              icon: Icons.person_add_outlined,
-              iconColor: AppColors.info,
-              title: 'Worker Matched',
-              subtitle:
-                  '3 workers matched for "Paint bedroom walls".',
-              time: '2 hours ago'),
-          _NotifItem(
-              icon: Icons.payment_outlined,
-              iconColor: AppColors.warning,
-              title: 'Payment Held',
-              subtitle: 'Rs. 4,500 held in escrow for sink repair.',
-              time: 'Yesterday'),
-          _NotifItem(
-              icon: Icons.star_outline_rounded,
-              iconColor: AppColors.badgeGold,
-              title: 'Rate Your Experience',
-              subtitle: 'How was Nimal Perera\'s wiring service?',
-              time: '2 days ago'),
-        ],
-      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_error!, style: AppTypography.bodyMedium),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: () {
+                          setState(() { _loading = true; _error = null; });
+                          _fetchNotifications();
+                        },
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
+              : _notifications.isEmpty
+                  ? Center(
+                      child: Text('No notifications yet',
+                          style: AppTypography.bodyMedium
+                              .copyWith(color: AppColors.textSecondary)),
+                    )
+                  : ListView.builder(
+                      itemCount: _notifications.length,
+                      itemBuilder: (context, index) {
+                        final n = _notifications[index];
+                        final title = n['title'] ?? 'Notification';
+                        final body = n['body'] ?? '';
+                        final isRead = n['isRead'] == true;
+                        final createdAt = n['createdAt']?.toString();
+                        final id = n['id']?.toString() ?? '';
+                        return GestureDetector(
+                          onTap: () {
+                            if (!isRead && id.isNotEmpty) {
+                              _markRead(id, index);
+                            }
+                          },
+                          child: _NotifItem(
+                            icon: _iconForTitle(title),
+                            iconColor: _iconColorForTitle(title),
+                            title: title,
+                            subtitle: body,
+                            time: _timeAgo(createdAt),
+                            unread: !isRead,
+                          ),
+                        );
+                      },
+                    ),
     );
   }
 }

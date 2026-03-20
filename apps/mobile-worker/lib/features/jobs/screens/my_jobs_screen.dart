@@ -3,6 +3,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/services/api_service.dart';
+import '../../../core/router/app_router.dart';
+import 'job_detail_screen.dart';
 
 class MyJobsScreen extends StatefulWidget {
   const MyJobsScreen({super.key});
@@ -16,6 +18,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
   late TabController _tabController;
   bool _isLoading = true;
   List<dynamic> _activeJobs = [];
+  List<dynamic> _appliedJobs = [];
   List<dynamic> _completedJobs = [];
 
   @override
@@ -28,12 +31,18 @@ class _MyJobsScreenState extends State<MyJobsScreen>
   Future<void> _fetchJobs() async {
     setState(() => _isLoading = true);
     try {
-      final data = await ApiService().getMyJobs();
+      final results = await Future.wait([
+        ApiService().getMyJobs(),
+        ApiService().getMyApplications(),
+      ]);
+      final data = results[0] as Map<String, dynamic>;
       final jobs = data['jobs'] as List;
+      final applications = results[1] as List;
       setState(() {
         _activeJobs = jobs.where((j) =>
           j['status'] == 'ASSIGNED' || j['status'] == 'IN_PROGRESS'
         ).toList();
+        _appliedJobs = applications;
         _completedJobs = jobs.where((j) => j['status'] == 'COMPLETED').toList();
         _isLoading = false;
       });
@@ -51,6 +60,26 @@ class _MyJobsScreenState extends State<MyJobsScreen>
   String _getCategoryIcon(String? name) {
     final cat = AppCategories.all.where((c) => c.name.toLowerCase() == (name ?? '').toLowerCase());
     return cat.isNotEmpty ? cat.first.icon : '🔧';
+  }
+
+  JobDetailData _jobDetailFromMap(Map<String, dynamic> job) {
+    final catName = job['category']?['name'] ?? '';
+    return JobDetailData(
+      id: job['id'] ?? '',
+      title: job['title'] ?? '',
+      category: catName,
+      categoryIcon: _getCategoryIcon(catName),
+      budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : 'Negotiable',
+      distanceKm: 0,
+      postedAt: _formatDate(job['createdAt']),
+      clientName: job['customer']?['user']?['name'] ?? 'Customer',
+      clientRating: (job['customer']?['user']?['customerProfile']?['rating'] ?? 0).toDouble(),
+      clientJobsPosted: 0,
+      description: job['description'] ?? '',
+      scheduledDate: _formatDate(job['scheduledDate']),
+      address: job['address'] ?? '',
+      status: job['status'],
+    );
   }
 
   @override
@@ -122,13 +151,48 @@ class _MyJobsScreenState extends State<MyJobsScreen>
                                   clientName: job['customer']?['user']?['name'] ?? 'Customer',
                                   scheduledDate: '',
                                   budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : '',
-                                  onTap: () {},
+                                  onTap: () {
+                                    Navigator.pushNamed(
+                                      context,
+                                      AppRoutes.jobDetail,
+                                      arguments: _jobDetailFromMap(job),
+                                    );
+                                  },
                                 );
                               },
                             ),
                           ),
-                      // Applied (not yet supported by backend)
-                      const EmptyState(icon: '📝', title: 'No applications', subtitle: 'Apply to jobs to see them here'),
+                      // Applied
+                      _appliedJobs.isEmpty
+                        ? const EmptyState(icon: '📝', title: 'No applications', subtitle: 'Apply to jobs to see them here')
+                        : RefreshIndicator(
+                            onRefresh: _fetchJobs,
+                            child: ListView.separated(
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              itemCount: _appliedJobs.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              itemBuilder: (_, i) {
+                                final app = _appliedJobs[i];
+                                final job = app['job'] ?? {};
+                                final catName = job['category']?['name'] ?? '';
+                                final status = app['status'] ?? 'PENDING';
+                                return _AppliedJobCard(
+                                  title: job['title'] ?? '',
+                                  categoryIcon: _getCategoryIcon(catName),
+                                  status: status,
+                                  budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : 'Negotiable',
+                                  appliedAt: _formatDate(app['createdAt']),
+                                  onTap: () {
+                                    Navigator.pushNamed(
+                                      context,
+                                      AppRoutes.jobDetail,
+                                      arguments: _jobDetailFromMap(job),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          ),
                       // Completed
                       _completedJobs.isEmpty
                         ? const EmptyState(icon: '✅', title: 'No completed jobs', subtitle: 'Completed jobs will appear here')
@@ -207,6 +271,79 @@ class _CompletedJobCard extends StatelessWidget {
             if (rating > 0) RatingStars(rating: rating, size: 14),
           ]),
         ],
+      ),
+    );
+  }
+}
+
+class _AppliedJobCard extends StatelessWidget {
+  final String title, categoryIcon, status, budget, appliedAt;
+  final VoidCallback onTap;
+  const _AppliedJobCard({
+    required this.title, required this.categoryIcon, required this.status,
+    required this.budget, required this.appliedAt, required this.onTap,
+  });
+
+  Color get _statusColor {
+    switch (status) {
+      case 'ACCEPTED': return AppColors.success;
+      case 'REJECTED': return AppColors.error;
+      default: return AppColors.warning;
+    }
+  }
+
+  String get _statusLabel {
+    switch (status) {
+      case 'ACCEPTED': return 'Accepted';
+      case 'REJECTED': return 'Rejected';
+      default: return 'Pending';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Text(categoryIcon, style: const TextStyle(fontSize: 22)),
+              const SizedBox(width: 10),
+              Expanded(child: Text(title, style: AppTypography.headlineSmall)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _statusLabel,
+                  style: AppTypography.labelSmall.copyWith(
+                    color: _statusColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
+              Text(budget, style: AppTypography.labelMedium.copyWith(
+                color: AppColors.primary, fontWeight: FontWeight.w600)),
+              const Spacer(),
+              Icon(Icons.access_time_rounded, size: 13, color: AppColors.textTertiary),
+              const SizedBox(width: 4),
+              Text('Applied $appliedAt', style: AppTypography.labelSmall),
+            ]),
+          ],
+        ),
       ),
     );
   }

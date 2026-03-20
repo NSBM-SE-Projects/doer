@@ -26,10 +26,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   Future<void> _fetch() async {
     try {
       _conversations = await ApiService().getConversations();
-      setState(() => _isLoading = false);
-    } catch (_) {
-      setState(() => _isLoading = false);
-    }
+    } catch (_) {}
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
@@ -121,7 +119,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _myUserId = AuthService().currentUser?.uid;
+    _myUserId = AuthService().currentUser?.email;
     _fetchMessages();
     _listenForRealTimeMessages();
   }

@@ -23,7 +23,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = true;
   String _name = '';
   String _email = '';
+  String _phone = '';
   int _totalJobs = 0;
+  int _completedJobs = 0;
+  double _totalSpent = 0;
 
   @override
   void initState() {
@@ -37,10 +40,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final user = data['user'];
       final jobs = await ApiService().getMyJobs();
       final jobList = jobs['jobs'] as List;
+      final completedJobs = jobList.where((j) => j['status'] == 'COMPLETED').toList();
+      final totalSpent = completedJobs.fold<double>(0, (sum, j) => sum + ((j['price'] ?? 0) as num).toDouble());
       setState(() {
         _name = user['name'] ?? AuthService().currentUser?.displayName ?? '';
         _email = user['email'] ?? '';
+        _phone = user['phone'] ?? '';
         _totalJobs = jobList.length;
+        _completedJobs = completedJobs.length;
+        _totalSpent = totalSpent;
         _isLoading = false;
       });
     } catch (_) {
@@ -79,7 +87,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       CircleAvatar(
                         radius: 44,
                         backgroundColor: AppColors.surfaceVariant,
-                        child: Text('A',
+                        child: Text(_name.isNotEmpty ? _name[0].toUpperCase() : '?',
                             style: AppTypography.displayLarge
                                 .copyWith(color: AppColors.primary)),
                       ),
@@ -107,7 +115,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 4),
                   Text(_email, style: AppTypography.bodySmall),
                   const SizedBox(height: 2),
-                  Text('+94 77 123 4567', style: AppTypography.bodySmall),
+                  Text(_phone.isNotEmpty ? _phone : 'Not set', style: AppTypography.bodySmall),
                 ],
               ),
             ),
@@ -124,13 +132,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: Row(
                 children: [
-                  _StatColumn(value: '12', label: 'Jobs Posted',
+                  _StatColumn(value: '$_totalJobs', label: 'Jobs Posted',
                       color: AppColors.primary),
                   Container(width: 1, height: 36, color: AppColors.border),
-                  _StatColumn(value: '9', label: 'Completed',
+                  _StatColumn(value: '$_completedJobs', label: 'Completed',
                       color: AppColors.success),
                   Container(width: 1, height: 36, color: AppColors.border),
-                  _StatColumn(value: 'Rs. 45k', label: 'Total Spent',
+                  _StatColumn(value: _totalSpent >= 1000 ? 'Rs. ${(_totalSpent / 1000).toStringAsFixed(1)}k' : 'Rs. ${_totalSpent.toStringAsFixed(0)}', label: 'Total Spent',
                       color: AppColors.textPrimary),
                 ],
               ),
@@ -141,13 +149,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // Account menu
             _MenuSection(title: 'Account', items: [
               _MenuItem(icon: Icons.person_outline_rounded,
-                  label: 'Edit Profile', onTap: () {}),
+                  label: 'Edit Profile', onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Coming soon')),
+                    );
+                  }),
               _MenuItem(icon: Icons.location_on_outlined,
                   label: 'Saved Addresses', onTap: () {}),
               _MenuItem(icon: Icons.payment_outlined,
                   label: 'Payment Methods', onTap: () {}),
               _MenuItem(icon: Icons.receipt_long_outlined,
-                  label: 'Payment History', onTap: () {}),
+                  label: 'Payment History', onTap: () {
+                    Navigator.pushNamed(context, '/payment-history');
+                  }),
             ]),
 
             const SizedBox(height: 16),
@@ -157,7 +171,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _MenuItem(icon: Icons.language_rounded,
                   label: 'Language', trailing: 'English', onTap: () {}),
               _MenuItem(icon: Icons.notifications_outlined,
-                  label: 'Notifications', onTap: () {}),
+                  label: 'Notifications', onTap: () {
+                    Navigator.pushNamed(context, '/notifications');
+                  }),
               _MenuItem(icon: Icons.dark_mode_outlined,
                   label: 'Appearance', trailing: 'Light', onTap: () {}),
             ]),

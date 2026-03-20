@@ -21,14 +21,10 @@ void main() async {
   // Set up background message handler
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-  // Restore saved sessions
+  // Restore sessions and connect real-time services
   await ApiService().init();
   await AuthService().init();
-
-  // Connect Socket.IO for real-time updates
   await SocketService().connect();
-
-  // Initialize push notifications
   await NotificationService().init();
 
   SystemChrome.setSystemUIOverlayStyle(

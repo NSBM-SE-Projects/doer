@@ -19,6 +19,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _phone = '';
   double _rating = 0;
   int _totalJobs = 0;
+  int _completedJobs = 0;
+  int _cancelledJobs = 0;
   String _verificationStatus = 'PENDING';
   String _bio = '';
   List<String> _services = [];
@@ -31,15 +33,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _fetch() async {
     try {
-      final data = await ApiService().getMe();
+      final results = await Future.wait([
+        ApiService().getMe(),
+        ApiService().getMyJobs(),
+      ]);
+      final data = results[0];
       final user = data['user'];
       final wp = user['workerProfile'];
+      final jobsData = results[1];
+      final jobList = jobsData['jobs'] as List? ?? [];
+      final completed = jobList.where((j) => j['status'] == 'COMPLETED').length;
+      final cancelled = jobList.where((j) => j['status'] == 'CANCELLED').length;
       setState(() {
         _name = user['name'] ?? '';
         _email = user['email'] ?? '';
         _phone = user['phone'] ?? '';
         _rating = (wp?['rating'] ?? 0).toDouble();
         _totalJobs = wp?['totalJobs'] ?? 0;
+        _completedJobs = completed;
+        _cancelledJobs = cancelled;
         _verificationStatus = wp?['verificationStatus'] ?? 'PENDING';
         _bio = wp?['bio'] ?? '';
         final cats = wp?['categories'] as List? ?? [];
@@ -141,7 +153,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           _StatItem(label: 'Jobs Done', value: '$_totalJobs'),
                           Container(
                               width: 1, height: 32, color: AppColors.border),
-                          _StatItem(label: 'Completion', value: '${_totalJobs > 0 ? 96 : 0}%'),
+                          _StatItem(label: 'Completion', value: '${(_completedJobs + _cancelledJobs) > 0 ? ((_completedJobs / (_completedJobs + _cancelledJobs)) * 100).round() : 0}%'),
                         ],
                       ),
                     ],
@@ -215,19 +227,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _InfoRow(
                       icon: Icons.location_on_outlined,
                       label: 'Service Area',
-                      value: 'Colombo District (25km radius)',
+                      value: 'Not set',
                     ),
                     const Divider(height: 24),
                     _InfoRow(
                       icon: Icons.attach_money_rounded,
                       label: 'Hourly Rate',
-                      value: 'Rs. 800 / hour',
+                      value: 'Not set',
                     ),
                     const Divider(height: 24),
                     _InfoRow(
                       icon: Icons.language_outlined,
                       label: 'Languages',
-                      value: 'Sinhala, English',
+                      value: 'Not set',
                     ),
                     const Divider(height: 24),
                     _InfoRow(
@@ -263,12 +275,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _ProfileMenuItem(
                       icon: Icons.star_outline_rounded,
                       label: 'Reviews & Ratings',
-                      onTap: () {},
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Coming soon')),
+                        );
+                      },
                     ),
                     _ProfileMenuItem(
                       icon: Icons.help_outline_rounded,
                       label: 'Help & Support',
-                      onTap: () {},
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Coming soon')),
+                        );
+                      },
                     ),
                     _ProfileMenuItem(
                       icon: Icons.logout_rounded,
@@ -439,7 +459,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     backgroundColor:
                         AppColors.primaryLight.withValues(alpha: 0.3),
                     child: Text(
-                      'K',
+                      _nameController.text.isNotEmpty ? _nameController.text[0].toUpperCase() : '?',
                       style: AppTypography.displayLarge.copyWith(
                         color: AppColors.primary,
                       ),

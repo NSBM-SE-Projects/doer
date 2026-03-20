@@ -1,106 +1,86 @@
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 
+class AuthUser {
+  final String email;
+  final String? displayName;
+
+  const AuthUser({required this.email, this.displayName});
+}
+
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  static final AuthService _instance = AuthService._internal();
+  factory AuthService() => _instance;
+  AuthService._internal();
 
-  User? get currentUser => _auth.currentUser;
+  AuthUser? _currentUser;
+  AuthUser? get currentUser => _currentUser;
 
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  Future<void> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    final email = prefs.getString('c_email');
+    if (email != null) {
+      _currentUser = AuthUser(
+        email: email,
+        displayName: prefs.getString('c_name'),
+      );
+    }
+  }
 
-  Future<User?> signUp({
+  Future<AuthUser?> signUp({
     required String email,
     required String password,
     required String name,
   }) async {
     try {
-      final credential = await _auth.createUserWithEmailAndPassword(
+      await ApiService().register(
         email: email,
         password: password,
+        name: name,
       );
-
-      await credential.user?.updateDisplayName(name);
-      await credential.user?.reload();
-
-      final user = _auth.currentUser;
-
-      // Register with backend
-      try {
-        final idToken = await user?.getIdToken() ?? '';
-        await ApiService().register(
-          firebaseToken: idToken,
-          firebaseUid: user?.uid ?? '',
-          email: email,
-          name: name,
-        );
-      } catch (_) {
-        // Backend registration can fail if user already exists
-      }
-
-      return user;
-    } on FirebaseAuthException catch (e) {
-      throw _getErrorMessage(e.code);
+      _currentUser = AuthUser(email: email, displayName: name);
+      await _saveSession(email, name);
+      return _currentUser;
+    } catch (e) {
+      throw ApiService.errorMessage(e);
     }
   }
 
-  Future<User?> signIn({
+  Future<AuthUser?> signIn({
     required String email,
     required String password,
   }) async {
     try {
-      final credential = await _auth.signInWithEmailAndPassword(
+      final resp = await ApiService().login(
         email: email,
         password: password,
       );
-
-      // Login with backend to get JWT
-      try {
-        final idToken = await credential.user?.getIdToken() ?? '';
-        await ApiService().login(
-          firebaseToken: idToken,
-          firebaseUid: credential.user?.uid ?? '',
-        );
-      } catch (_) {}
-
-      return credential.user;
-    } on FirebaseAuthException catch (e) {
-      throw _getErrorMessage(e.code);
+      final user = resp['user'];
+      final name = user?['name'] ?? email.split('@').first;
+      _currentUser = AuthUser(email: email, displayName: name);
+      await _saveSession(email, name);
+      return _currentUser;
+    } catch (e) {
+      throw ApiService.errorMessage(e);
     }
   }
 
   Future<void> signOut() async {
+    _currentUser = null;
     await ApiService().logout();
-    await _auth.signOut();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('c_email');
+    await prefs.remove('c_name');
   }
 
   Future<void> resetPassword({required String email}) async {
-    try {
-      await _auth.sendPasswordResetEmail(email: email);
-    } on FirebaseAuthException catch (e) {
-      throw _getErrorMessage(e.code);
-    }
+    // Password reset requires backend endpoint (not yet implemented)
+    throw 'Password reset is not available yet. Please contact support.';
   }
 
-  String _getErrorMessage(String code) {
-    switch (code) {
-      case 'email-already-in-use':
-        return 'This email is already registered. Try signing in.';
-      case 'invalid-email':
-        return 'Please enter a valid email address.';
-      case 'weak-password':
-        return 'Password is too weak. Use at least 6 characters.';
-      case 'user-not-found':
-        return 'No account found with this email.';
-      case 'wrong-password':
-        return 'Incorrect password. Please try again.';
-      case 'user-disabled':
-        return 'This account has been disabled.';
-      case 'too-many-requests':
-        return 'Too many attempts. Please try again later.';
-      case 'invalid-credential':
-        return 'Invalid email or password.';
-      default:
-        return 'Something went wrong. Please try again.';
-    }
+  Future<void> _saveSession(String email, String? name) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('c_email', email);
+    if (name != null) await prefs.setString('c_name', name);
   }
 }

@@ -487,7 +487,7 @@ class JobCard extends StatelessWidget {
                 _InfoChip(icon: Icons.schedule_outlined, text: date),
               ],
             ),
-            if (workerName != null) ...[
+            if (workerName != null && workerName!.isNotEmpty) ...[
               const SizedBox(height: 10),
               Row(
                 children: [

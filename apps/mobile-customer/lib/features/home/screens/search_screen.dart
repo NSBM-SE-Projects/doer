@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/api_service.dart';
+import '../../workers/screens/worker_screens.dart';
 
 // ──────────────────────────────────────────────────────────────
 // SEARCH SCREEN
@@ -20,6 +22,17 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   final _controller = TextEditingController();
   bool _hasQuery = false;
+  List<dynamic> _workers = [];
+  bool _isSearching = false;
+
+  Future<void> _searchWorkers(String query) async {
+    if (query.isEmpty) return;
+    setState(() => _isSearching = true);
+    try {
+      _workers = await ApiService().getWorkers();
+    } catch (_) {}
+    if (mounted) setState(() => _isSearching = false);
+  }
 
   final _recentSearches = [
     'Plumber near me',
@@ -57,7 +70,10 @@ class _SearchScreenState extends State<SearchScreen> {
             controller: _controller,
             autofocus: true, // keyboard opens immediately
             style: AppTypography.bodyMedium,
-            onChanged: (v) => setState(() => _hasQuery = v.isNotEmpty),
+            onChanged: (v) {
+              setState(() => _hasQuery = v.isNotEmpty);
+              if (v.isNotEmpty && _workers.isEmpty) _searchWorkers(v);
+            },
             decoration: InputDecoration(
               hintText: 'Search services or workers...',
               filled: true,
@@ -252,39 +268,42 @@ class _SearchScreenState extends State<SearchScreen> {
             child: Text('Workers', style: AppTypography.labelMedium),
           ),
           const SizedBox(height: 10),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              children: [
-                WorkerCard(
-                  name: 'Nimal Perera',
-                  skill: 'Electrician',
-                  badge: BadgeLevel.gold,
-                  rating: 4.8,
-                  distance: 2.1,
-                  onTap: () {},
-                ),
-                const SizedBox(height: 10),
-                WorkerCard(
-                  name: 'Saman Fernando',
-                  skill: 'Plumber',
-                  badge: BadgeLevel.silver,
-                  rating: 4.5,
-                  distance: 3.4,
-                  onTap: () {},
-                ),
-                const SizedBox(height: 10),
-                WorkerCard(
-                  name: 'Kumari Silva',
-                  skill: 'House Cleaning',
-                  badge: BadgeLevel.platinum,
-                  rating: 4.9,
-                  distance: 1.8,
-                  onTap: () {},
-                ),
-              ],
+          if (_isSearching)
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                children: _workers.where((w) {
+                  final query = _controller.text.toLowerCase();
+                  final name = (w['user']?['name'] ?? '').toString().toLowerCase();
+                  final cats = (w['categories'] as List? ?? []);
+                  final catMatch = cats.any((c) =>
+                    (c['category']?['name'] ?? '').toString().toLowerCase().contains(query));
+                  return name.contains(query) || catMatch;
+                }).take(5).map<Widget>((w) {
+                  final user = w['user'] ?? {};
+                  final cats = w['categories'] as List? ?? [];
+                  final catName = cats.isNotEmpty ? (cats[0]['category']?['name'] ?? '') : '';
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: WorkerCard(
+                      name: user['name'] ?? '',
+                      skill: catName,
+                      badge: w['verificationStatus'] == 'VERIFIED' ? BadgeLevel.bronze : BadgeLevel.trainee,
+                      rating: (w['rating'] ?? 0).toDouble(),
+                      distance: 0,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => WorkerProfileScreen(workerId: w['id'].toString()),
+                      )),
+                    ),
+                  );
+                }).toList(),
+              ),
             ),
-          ),
           const SizedBox(height: 40),
         ],
       ),

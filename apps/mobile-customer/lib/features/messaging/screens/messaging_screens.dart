@@ -21,6 +21,7 @@ class ConversationsScreen extends StatefulWidget {
 class _ConversationsScreenState extends State<ConversationsScreen> {
   List<dynamic> _conversations = [];
   bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -31,7 +32,10 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   Future<void> _fetch() async {
     try {
       _conversations = await ApiService().getConversations();
-    } catch (_) {}
+      _error = null;
+    } catch (e) {
+      _error = ApiService.errorMessage(e);
+    }
     if (mounted) setState(() => _isLoading = false);
   }
 
@@ -70,7 +74,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                     jobTitle: c['jobTitle'] ?? '',
                     unread: false,
                     onTap: () => Navigator.push(context, MaterialPageRoute(
-                      builder: (_) => ChatScreen(jobId: c['jobId'], workerName: other?['name'] ?? 'Worker'),
+                      builder: (_) => ChatScreen(jobId: c['jobId'], workerName: other?['name'] ?? 'Worker', jobTitle: c['jobTitle']),
                     )),
                   );
                 },
@@ -93,7 +97,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
 class ChatScreen extends StatefulWidget {
   final String? jobId;
   final String? workerName;
-  const ChatScreen({super.key, this.jobId, this.workerName});
+  final String? jobTitle;
+  const ChatScreen({super.key, this.jobId, this.workerName, this.jobTitle});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -248,14 +253,10 @@ class _ChatScreenState extends State<ChatScreen> {
                     size: 16, color: AppColors.primary),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text('Fix kitchen sink leak · In Progress',
+                  child: Text(widget.jobTitle ?? 'Job Chat',
                       style: AppTypography.labelMedium
                           .copyWith(color: AppColors.primary)),
                 ),
-                Text('Rs. 4,500',
-                    style: AppTypography.labelMedium.copyWith(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -329,18 +330,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   const SizedBox(width: 8),
                   // Send button
                   GestureDetector(
-                    onTap: () {
-                      if (_messageController.text.trim().isNotEmpty) {
-                        setState(() {
-                          _messages.add(_ChatMessage(
-                            text: _messageController.text.trim(),
-                            isMe: true,
-                            time: 'Now',
-                          ));
-                          _messageController.clear();
-                        });
-                      }
-                    },
+                    onTap: _sendMessageToApi,
                     child: Container(
                       width: 42,
                       height: 42,

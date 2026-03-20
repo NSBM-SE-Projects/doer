@@ -4,6 +4,9 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/auth_service.dart';
+import 'category_detail_screen.dart';
+import '../../workers/screens/worker_screens.dart';
+import '../../jobs/screens/my_jobs_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -53,6 +56,37 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  String _mapStatus(String? s) {
+    switch (s?.toUpperCase()) {
+      case 'OPEN': return JobStatus.posted;
+      case 'APPLICATIONS_RECEIVED': return JobStatus.applicationsReceived;
+      case 'ASSIGNED': return JobStatus.workerAccepted;
+      case 'IN_PROGRESS': return JobStatus.inProgress;
+      case 'COMPLETED': return JobStatus.completed;
+      case 'REVIEWING': return JobStatus.reviewed;
+      case 'CLOSED': return JobStatus.closed;
+      case 'CANCELLED': return JobStatus.cancelled;
+      default: return JobStatus.posted;
+    }
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning,';
+    if (hour < 17) return 'Good afternoon,';
+    return 'Good evening,';
+  }
+
+  String _getBadgeLevel(Map<dynamic, dynamic> worker) {
+    final status = worker['verificationStatus'] ?? '';
+    final totalJobs = (worker['totalJobs'] ?? 0) as int;
+    if (status == 'VERIFIED' && totalJobs >= 100) return BadgeLevel.platinum;
+    if (status == 'VERIFIED' && totalJobs >= 50) return BadgeLevel.gold;
+    if (status == 'VERIFIED' && totalJobs >= 20) return BadgeLevel.silver;
+    if (status == 'VERIFIED' || totalJobs >= 5) return BadgeLevel.bronze;
+    return BadgeLevel.trainee;
+  }
+
   String _getCategoryIcon(String? name) {
     final cat = AppCategories.all.where((c) => c.name.toLowerCase() == (name ?? '').toLowerCase());
     return cat.isNotEmpty ? cat.first.icon : '🔧';
@@ -81,7 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Good morning,',
+                                Text(_getGreeting(),
                                   style: AppTypography.bodySmall.copyWith(color: AppColors.textTertiary)),
                                 const SizedBox(height: 2),
                                 Text(_userName.split(' ').first, style: AppTypography.displaySmall),
@@ -146,7 +180,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         separatorBuilder: (_, __) => const SizedBox(width: 14),
                         itemBuilder: (context, index) {
                           final cat = AppCategories.all[index];
-                          return CategoryChip(category: cat, compact: true, onTap: () {});
+                          return CategoryChip(category: cat, compact: true, onTap: () {
+                            Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => CategoryDetailScreen(category: cat),
+                            ));
+                          });
                         },
                       ),
                     ),
@@ -204,10 +242,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: WorkerCard(
                                   name: user['name'] ?? '',
                                   skill: catName,
-                                  badge: BadgeLevel.trainee,
+                                  badge: _getBadgeLevel(w),
                                   rating: (w['rating'] ?? 0).toDouble(),
                                   distance: 0,
-                                  onTap: () {},
+                                  onTap: () {
+                                    Navigator.push(context, MaterialPageRoute(
+                                      builder: (_) => WorkerProfileScreen(
+                                        workerId: w['id'].toString(),
+                                      ),
+                                    ));
+                                  },
                                 ),
                               );
                             }).toList(),
@@ -218,7 +262,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     // Recent jobs
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: SectionHeader(title: 'Recent jobs', actionText: 'View all', onAction: () {}),
+                      child: SectionHeader(title: 'Recent jobs', actionText: 'View all', onAction: () {
+                        Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => const MyJobsScreen(),
+                        ));
+                      }),
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -234,11 +282,15 @@ class _HomeScreenState extends State<HomeScreen> {
                                   title: job['title'] ?? '',
                                   category: catName,
                                   categoryIcon: _getCategoryIcon(catName),
-                                  status: job['status'] ?? 'OPEN',
+                                  status: _mapStatus(job['status']),
                                   budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : 'TBD',
                                   date: _timeAgo(job['createdAt']),
                                   workerName: workerUser != null ? workerUser['name'] ?? '' : '',
-                                  onTap: () {},
+                                  onTap: () {
+                                    Navigator.push(context, MaterialPageRoute(
+                                      builder: (_) => JobDetailScreen(jobId: job['id']),
+                                    ));
+                                  },
                                 ),
                               );
                             }).toList(),

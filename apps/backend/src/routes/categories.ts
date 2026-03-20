@@ -15,16 +15,41 @@ const createCategorySchema = z.object({
 
 const updateCategorySchema = createCategorySchema.partial();
 
-// GET /api/categories — list all categories (public)
+const defaultCategories = [
+  { name: 'Plumbing', description: 'Pipe repairs, installations, and maintenance' },
+  { name: 'Electrical', description: 'Wiring, fixtures, and electrical repairs' },
+  { name: 'Cleaning', description: 'Home and office cleaning services' },
+  { name: 'Painting', description: 'Interior and exterior painting' },
+  { name: 'Gardening', description: 'Lawn care, landscaping, and garden maintenance' },
+  { name: 'Moving', description: 'Packing, loading, and relocation services' },
+  { name: 'Carpentry', description: 'Furniture repair, woodwork, and installations' },
+  { name: 'Appliance Repair', description: 'Repair and maintenance of home appliances' },
+];
+
+// GET /api/categories — list all categories (public, auto-seeds if empty)
 router.get(
   '/',
   asyncHandler(async (_req, res) => {
-    const categories = await prisma.serviceCategory.findMany({
+    let categories = await prisma.serviceCategory.findMany({
       orderBy: { name: 'asc' },
       include: {
         _count: { select: { workers: true, jobs: true } },
       },
     });
+
+    // Auto-seed if empty
+    if (categories.length === 0) {
+      await Promise.all(
+        defaultCategories.map((cat) =>
+          prisma.serviceCategory.upsert({ where: { name: cat.name }, update: {}, create: cat })
+        )
+      );
+      categories = await prisma.serviceCategory.findMany({
+        orderBy: { name: 'asc' },
+        include: { _count: { select: { workers: true, jobs: true } } },
+      });
+    }
+
     res.json({ categories });
   })
 );

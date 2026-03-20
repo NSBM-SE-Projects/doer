@@ -18,6 +18,7 @@ const envSchema = z.object({
   CLOUDINARY_API_SECRET: z.string().optional(),
   PAYHERE_MERCHANT_ID: z.string().optional(),
   PAYHERE_SECRET: z.string().optional(),
+  GOOGLE_MAPS_API_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
