@@ -7,6 +7,7 @@ import 'core/router/app_router.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/api_service.dart';
 import 'core/services/socket_service.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'core/services/notification_service.dart';
 
 void main() async {
@@ -16,6 +17,9 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Set up background message handler
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   // Restore sessions and connect real-time services
   await ApiService().init();

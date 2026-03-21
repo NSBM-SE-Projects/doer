@@ -111,6 +111,33 @@ class ApiService {
     return resp.data;
   }
 
+  Future<Map<String, dynamic>> googleAuth({
+    required String email,
+    required String name,
+    required String googleId,
+  }) async {
+    final resp = await _dio.post('/auth/google', data: {
+      'email': email,
+      'name': name,
+      'googleId': googleId,
+      'role': 'WORKER',
+    });
+    final jwt = resp.data['token'] as String;
+    await _saveJwt(jwt);
+    return resp.data;
+  }
+
+  Future<Map<String, dynamic>> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final resp = await _dio.put('/auth/change-password', data: {
+      'currentPassword': currentPassword,
+      'newPassword': newPassword,
+    });
+    return resp.data;
+  }
+
   /// Logout — clear JWT
   Future<void> logout() async {
     await _clearJwt();

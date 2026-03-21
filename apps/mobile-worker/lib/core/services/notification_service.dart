@@ -1,76 +1,83 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'api_service.dart';
 
-/// Handles Firebase Cloud Messaging (FCM) push notifications.
-/// Registers the device token with the backend so it can send pushes.
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
   final _messaging = FirebaseMessaging.instance;
+  final _localNotifications = FlutterLocalNotificationsPlugin();
+  bool _initialized = false;
 
-  /// Initialize: request permission, get token, register with backend
   Future<void> init() async {
-    // Request permission (iOS needs this, Android auto-grants)
+    // Set up local notifications (for showing foreground push)
+    if (!_initialized) {
+      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const iosSettings = DarwinInitializationSettings();
+      await _localNotifications.initialize(
+        const InitializationSettings(android: androidSettings, iOS: iosSettings),
+      );
+
+      // Create Android notification channel
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(const AndroidNotificationChannel(
+            'doer_notifications',
+            'Doer Notifications',
+            description: 'Notifications from Doer',
+            importance: Importance.high,
+          ));
+      _initialized = true;
+    }
+
     final settings = await _messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
+      alert: true, badge: true, sound: true,
     );
+    if (settings.authorizationStatus == AuthorizationStatus.denied) return;
 
-    if (settings.authorizationStatus == AuthorizationStatus.denied) {
-      print('Push notification permission denied');
-      return;
-    }
-
-    // Get FCM token and register with backend
     final token = await _messaging.getToken();
-    if (token != null) {
-      await _registerToken(token);
-    }
+    if (token != null) await _registerToken(token);
 
-    // Listen for token refresh
     _messaging.onTokenRefresh.listen(_registerToken);
-
-    // Handle foreground messages
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-
-    // Handle background/terminated tap
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageTap);
 
-    // Check if app was opened from a notification
-    final initialMessage = await _messaging.getInitialMessage();
-    if (initialMessage != null) {
-      _handleMessageTap(initialMessage);
-    }
+    final initial = await _messaging.getInitialMessage();
+    if (initial != null) _handleMessageTap(initial);
   }
 
   Future<void> _registerToken(String token) async {
-    try {
-      // Call backend endpoint to store this device's FCM token
-      final dio = ApiService();
-      await dio.registerFcmToken(token);
-    } catch (e) {
-      print('Failed to register FCM token: $e');
-    }
+    try { await ApiService().registerFcmToken(token); } catch (_) {}
   }
 
   void _handleForegroundMessage(RemoteMessage message) {
-    print('Foreground notification: ${message.notification?.title}');
-    // The app is open — Socket.IO will handle real-time updates.
-    // We could show an in-app snackbar here if needed.
+    final notification = message.notification;
+    if (notification == null) return;
+
+    _localNotifications.show(
+      notification.hashCode,
+      notification.title ?? 'Doer',
+      notification.body ?? '',
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'doer_notifications',
+          'Doer Notifications',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+    );
   }
 
   void _handleMessageTap(RemoteMessage message) {
-    // User tapped the notification — navigate to the relevant screen
-    print('Notification tapped: ${message.data}');
-    // TODO: Navigate based on message.data['type']
+    // Navigation can be handled here based on message.data['type']
   }
 }
 
-/// Background message handler — must be a top-level function
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  print('Background message: ${message.notification?.title}');
+  // Background messages are handled by the system tray automatically
 }

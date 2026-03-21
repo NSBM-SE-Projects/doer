@@ -106,6 +106,74 @@ router.post(
   })
 );
 
+// POST /api/auth/google — sign in or register with Google
+router.post(
+  '/google',
+  asyncHandler(async (req, res) => {
+    const { email, name, googleId, role } = req.body;
+    if (!email || !googleId) throw AppError.badRequest('email and googleId are required');
+
+    let user = await prisma.user.findUnique({
+      where: { email },
+      include: { customerProfile: true, workerProfile: true },
+    });
+
+    if (user) {
+      // Existing user — just log them in
+      if (!user.isActive) throw AppError.forbidden('Account is deactivated');
+    } else {
+      // New user — create account
+      const userRole = role === 'WORKER' ? 'WORKER' : 'CUSTOMER';
+      user = await prisma.user.create({
+        data: {
+          firebaseUid: `google_${googleId}`,
+          email,
+          name: name || email.split('@')[0],
+          role: userRole as any,
+          ...(userRole === 'CUSTOMER'
+            ? { customerProfile: { create: {} } }
+            : { workerProfile: { create: {} } }),
+        },
+        include: { customerProfile: true, workerProfile: true },
+      });
+    }
+
+    const token = signJwt(user.id, user.role);
+    res.json({ token, user });
+  })
+);
+
+// PUT /api/auth/change-password
+router.put(
+  '/change-password',
+  authenticate,
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const schema = z.object({
+      currentPassword: z.string().min(1),
+      newPassword: z.string().min(6),
+    });
+    const { currentPassword, newPassword } = schema.parse(req.body);
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+    });
+    if (!user) throw AppError.notFound('User not found');
+
+    if (user.passwordHash) {
+      const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!valid) throw AppError.unauthorized('Current password is incorrect');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await prisma.user.update({
+      where: { id: req.user!.userId },
+      data: { passwordHash },
+    });
+
+    res.json({ message: 'Password updated successfully' });
+  })
+);
+
 // GET /api/auth/me — get current user from JWT
 router.get(
   '/me',

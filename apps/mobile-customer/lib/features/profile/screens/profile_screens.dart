@@ -343,10 +343,103 @@ class _MenuItem extends StatelessWidget {
 
 // ──────────────────────────────────────────────────────────────
 // SETTINGS SCREEN
-// App settings: change password, biometric login, location, delete account.
+// App settings: change password, location, delete account.
 // ──────────────────────────────────────────────────────────────
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
+
+  void _showChangePassword(BuildContext context) {
+    final currentController = TextEditingController();
+    final newController = TextEditingController();
+    final confirmController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        bool isLoading = false;
+        String? error;
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            title: const Text('Change Password'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (error != null) ...[
+                  Text(error!, style: AppTypography.bodySmall.copyWith(color: AppColors.error)),
+                  const SizedBox(height: 12),
+                ],
+                TextField(
+                  controller: currentController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Current Password',
+                    prefixIcon: Icon(Icons.lock_outline_rounded, size: 20),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: newController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'New Password',
+                    prefixIcon: Icon(Icons.lock_rounded, size: 20),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: confirmController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Confirm New Password',
+                    prefixIcon: Icon(Icons.lock_rounded, size: 20),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: isLoading ? null : () async {
+                  if (newController.text.length < 6) {
+                    setDialogState(() => error = 'Password must be at least 6 characters');
+                    return;
+                  }
+                  if (newController.text != confirmController.text) {
+                    setDialogState(() => error = 'Passwords do not match');
+                    return;
+                  }
+                  setDialogState(() { isLoading = true; error = null; });
+                  try {
+                    await AuthService().changePassword(
+                      currentPassword: currentController.text,
+                      newPassword: newController.text,
+                    );
+                    if (ctx.mounted) {
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Password updated successfully')),
+                      );
+                    }
+                  } catch (e) {
+                    setDialogState(() {
+                      error = e.toString();
+                      isLoading = false;
+                    });
+                  }
+                },
+                child: isLoading
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Update'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -366,14 +459,7 @@ class SettingsScreen extends StatelessWidget {
               icon: Icons.lock_outline_rounded,
               title: 'Change Password',
               subtitle: 'Update your account password',
-              onTap: () {}),
-          _SettingsTile(
-              icon: Icons.fingerprint_rounded,
-              title: 'Biometric Login',
-              subtitle: 'Use fingerprint or face to sign in',
-              trailing: Switch(
-                  value: true, onChanged: (v) {},
-                  activeThumbColor: AppColors.primary)),
+              onTap: () => _showChangePassword(context)),
           _SettingsTile(
               icon: Icons.location_on_outlined,
               title: 'Location Services',
