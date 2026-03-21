@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
+import 'socket_service.dart';
 
 class WorkerUser {
   final String email;
@@ -40,6 +41,7 @@ class AuthService {
       );
       _currentUser = WorkerUser(email: email, displayName: name);
       await _saveSession(email, name);
+      await SocketService().connect();
       return _currentUser;
     } catch (e) {
       throw ApiService.errorMessage(e);
@@ -59,6 +61,7 @@ class AuthService {
       final name = user?['name'] ?? email.split('@').first;
       _currentUser = WorkerUser(email: email, displayName: name);
       await _saveSession(email, name);
+      await SocketService().connect();
       return _currentUser;
     } catch (e) {
       throw ApiService.errorMessage(e);
