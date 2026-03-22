@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -11,13 +13,96 @@ import '../../../core/services/api_service.dart';
 //   - Qualification certificates
 //   - Background check consent
 // Each item shows its current status (pending/submitted/approved/rejected).
-// Progress bar shows overall verification level → badge tier.
+// Progress bar shows overall verification level -> badge tier.
 // ──────────────────────────────────────────────────────────────
-class VerificationScreen extends StatelessWidget {
+class VerificationScreen extends StatefulWidget {
   const VerificationScreen({super.key});
 
   @override
+  State<VerificationScreen> createState() => _VerificationScreenState();
+}
+
+class _VerificationScreenState extends State<VerificationScreen> {
+  final _api = ApiService();
+  bool _loading = true;
+  String _verificationStatus = 'NOT_SUBMITTED';
+  String _badgeLevel = BadgeLevel.trainee;
+  String? _rejectionReason;
+  String? _nicFrontUrl;
+  String? _nicBackUrl;
+  String? _backgroundCheckUrl;
+  List<dynamic> _qualificationDocs = [];
+  String? _nextBadge;
+  String _nextBadgeHint = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatus();
+  }
+
+  Future<void> _loadStatus() async {
+    setState(() => _loading = true);
+    try {
+      final data = await _api.getVerificationStatus();
+      setState(() {
+        _verificationStatus = data['verificationStatus'] ?? 'NOT_SUBMITTED';
+        _badgeLevel = _mapBadgeLevel(data['badgeLevel']);
+        _rejectionReason = data['rejectionReason'];
+        _nicFrontUrl = data['nicFrontUrl'];
+        _nicBackUrl = data['nicBackUrl'];
+        _backgroundCheckUrl = data['backgroundCheckUrl'];
+        _qualificationDocs = data['qualificationDocs'] ?? [];
+        _nextBadge = data['nextBadge'];
+        _nextBadgeHint = data['nextBadgeHint'] ?? '';
+      });
+    } catch (e) {
+      // If endpoint not available yet, use defaults
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  String _mapBadgeLevel(String? level) {
+    switch (level) {
+      case 'TRAINEE': return BadgeLevel.trainee;
+      case 'BRONZE': return BadgeLevel.bronze;
+      case 'SILVER': return BadgeLevel.silver;
+      case 'GOLD': return BadgeLevel.gold;
+      case 'PLATINUM': return BadgeLevel.platinum;
+      default: return BadgeLevel.trainee;
+    }
+  }
+
+  String _mapVerificationDisplay(String status) {
+    switch (status) {
+      case 'NOT_SUBMITTED': return VerificationStatus.pending;
+      case 'PENDING': return VerificationStatus.submitted;
+      case 'VERIFIED': return VerificationStatus.approved;
+      case 'REJECTED': return VerificationStatus.rejected;
+      default: return VerificationStatus.pending;
+    }
+  }
+
+  double _badgeProgress() {
+    const levels = [BadgeLevel.trainee, BadgeLevel.bronze, BadgeLevel.silver, BadgeLevel.gold, BadgeLevel.platinum];
+    final idx = levels.indexOf(_badgeLevel);
+    if (idx < 0) return 0;
+    return idx / (levels.length - 1);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(title: const Text('Verification')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final displayStatus = _mapVerificationDisplay(_verificationStatus);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -33,7 +118,39 @@ class VerificationScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Current badge + progress
-            _BadgeProgressCard(),
+            _buildBadgeProgressCard(),
+
+            // Rejection banner
+            if (_verificationStatus == 'REJECTED' && _rejectionReason != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.warning_rounded, color: AppColors.error, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Verification Rejected', style: AppTypography.headlineSmall.copyWith(color: AppColors.error)),
+                          const SizedBox(height: 4),
+                          Text(_rejectionReason!, style: AppTypography.bodySmall),
+                          const SizedBox(height: 8),
+                          Text('Please re-submit your documents.', style: AppTypography.labelSmall.copyWith(color: AppColors.error)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             const SizedBox(height: 24),
 
@@ -49,16 +166,15 @@ class VerificationScreen extends StatelessWidget {
             // NIC Verification
             VerificationCard(
               title: 'National Identity Card',
-              subtitle: 'Upload front & back of your NIC',
-              status: VerificationStatus.submitted,
+              subtitle: _nicFrontUrl != null ? 'Documents uploaded' : 'Upload front & back of your NIC',
+              status: _nicFrontUrl != null ? displayStatus : VerificationStatus.pending,
               icon: Icons.badge_outlined,
-              onTap: () {
-                Navigator.push(
+              onTap: () async {
+                final result = await Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const NicUploadScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const NicUploadScreen()),
                 );
+                if (result == true) _loadStatus();
               },
             ),
 
@@ -67,16 +183,17 @@ class VerificationScreen extends StatelessWidget {
             // Qualification documents
             VerificationCard(
               title: 'Qualifications & Certificates',
-              subtitle: 'Upload skill certificates or trade licenses',
-              status: VerificationStatus.pending,
+              subtitle: _qualificationDocs.isNotEmpty
+                  ? '${_qualificationDocs.length} document(s) uploaded'
+                  : 'Upload skill certificates or trade licenses',
+              status: _qualificationDocs.isNotEmpty ? displayStatus : VerificationStatus.pending,
               icon: Icons.workspace_premium_outlined,
-              onTap: () {
-                Navigator.push(
+              onTap: () async {
+                final result = await Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const QualificationUploadScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const QualificationUploadScreen()),
                 );
+                if (result == true) _loadStatus();
               },
             ),
 
@@ -85,11 +202,11 @@ class VerificationScreen extends StatelessWidget {
             // Background check
             VerificationCard(
               title: 'Background Check',
-              subtitle: 'Police clearance certificate',
-              status: VerificationStatus.pending,
+              subtitle: _backgroundCheckUrl != null ? 'Certificate uploaded' : 'Police clearance certificate',
+              status: _backgroundCheckUrl != null ? displayStatus : VerificationStatus.pending,
               icon: Icons.security_outlined,
               onTap: () {
-                _showBackgroundCheckInfo(context);
+                _showBackgroundCheckUpload(context);
               },
             ),
 
@@ -105,50 +222,10 @@ class VerificationScreen extends StatelessWidget {
     );
   }
 
-  void _showBackgroundCheckInfo(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Background Check', style: AppTypography.headlineLarge),
-            const SizedBox(height: 12),
-            Text(
-              'A background check requires submitting a Police Clearance Certificate (PCC) from your local police station.\n\nThis is reviewed manually by our team within 3-5 business days.',
-              style: AppTypography.bodyMedium
-                  .copyWith(color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 20),
-            DoerButton(
-              label: 'Upload Police Certificate',
-              onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Document upload coming soon')),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────────────
-// BADGE PROGRESS CARD
-// Shows current badge and progress to next level.
-// ──────────────────────────────────────────────────────────────
-class _BadgeProgressCard extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    const currentBadge = BadgeLevel.trainee;
-    const nextBadge = BadgeLevel.bronze;
-    const progress = 0.4; // 40% toward bronze
+  Widget _buildBadgeProgressCard() {
+    const badgeOrder = [BadgeLevel.trainee, BadgeLevel.bronze, BadgeLevel.silver, BadgeLevel.gold, BadgeLevel.platinum];
+    final currentIndex = badgeOrder.indexOf(_badgeLevel);
+    final nextBadgeLabel = currentIndex < badgeOrder.length - 1 ? badgeOrder[currentIndex + 1] : null;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -162,44 +239,90 @@ class _BadgeProgressCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              BadgePill(badge: currentBadge),
+              BadgePill(badge: _badgeLevel),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Current Level', style: AppTypography.labelSmall),
-                    Text(BadgeLevel.label(currentBadge),
-                        style: AppTypography.headlineMedium),
+                    Text(BadgeLevel.label(_badgeLevel), style: AppTypography.headlineMedium),
                   ],
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text('Next Level', style: AppTypography.labelSmall),
-                  BadgePill(badge: nextBadge),
-                ],
-              ),
+              if (nextBadgeLabel != null)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('Next Level', style: AppTypography.labelSmall),
+                    BadgePill(badge: nextBadgeLabel),
+                  ],
+                ),
             ],
           ),
           const SizedBox(height: 16),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
-              value: progress,
+              value: _badgeProgress(),
               backgroundColor: AppColors.surfaceVariant,
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(AppColors.primary),
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
               minHeight: 8,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Submit NIC to reach Bronze level',
+            _nextBadgeHint.isNotEmpty ? _nextBadgeHint : 'Submit documents to progress',
             style: AppTypography.labelSmall,
           ),
         ],
+      ),
+    );
+  }
+
+  void _showBackgroundCheckUpload(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Background Check', style: AppTypography.headlineLarge),
+            const SizedBox(height: 12),
+            Text(
+              'A background check requires submitting a Police Clearance Certificate (PCC) from your local police station.\n\nThis is reviewed manually by our team within 3-5 business days.',
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 20),
+            DoerButton(
+              label: 'Upload Police Certificate',
+              onPressed: () async {
+                Navigator.pop(context);
+                final picker = ImagePicker();
+                final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+                if (picked == null) return;
+                try {
+                  await _api.uploadVerificationDocuments(backgroundCheckPath: picked.path);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Background check uploaded successfully')),
+                    );
+                    _loadStatus();
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Upload failed: ${ApiService.errorMessage(e)}')),
+                    );
+                  }
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }
@@ -214,8 +337,8 @@ class _BadgeLevelGuide extends StatelessWidget {
     _BadgeInfo(BadgeLevel.trainee, 'Account created', 'Default level'),
     _BadgeInfo(BadgeLevel.bronze, 'NIC verified', 'Identity confirmed'),
     _BadgeInfo(BadgeLevel.silver, 'NIC + Qualifications', 'Skills verified'),
-    _BadgeInfo(BadgeLevel.gold, 'All docs + 10 reviews ≥ 4.0', 'Trusted worker'),
-    _BadgeInfo(BadgeLevel.platinum, 'Gold + background check', 'Elite worker'),
+    _BadgeInfo(BadgeLevel.gold, 'All docs + 10 jobs + 4.0 rating', 'Trusted worker'),
+    _BadgeInfo(BadgeLevel.platinum, 'Gold + background check + 50 jobs', 'Elite worker'),
   ];
 
   @override
@@ -263,15 +386,28 @@ class NicUploadScreen extends StatefulWidget {
 }
 
 class _NicUploadScreenState extends State<NicUploadScreen> {
-  bool _frontUploaded = false;
-  bool _backUploaded = false;
+  File? _frontFile;
+  File? _backFile;
   bool _isSubmitting = false;
   final _nicController = TextEditingController();
+  final _picker = ImagePicker();
 
   @override
   void dispose() {
     _nicController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage(bool isFront) async {
+    final picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (picked == null) return;
+    setState(() {
+      if (isFront) {
+        _frontFile = File(picked.path);
+      } else {
+        _backFile = File(picked.path);
+      }
+    });
   }
 
   Future<void> _submitNic() async {
@@ -282,19 +418,32 @@ class _NicUploadScreenState extends State<NicUploadScreen> {
       );
       return;
     }
+    if (_frontFile == null || _backFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please upload both NIC front and back')),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
     try {
+      // First update NIC number
       await ApiService().updateWorkerProfile(nicNumber: nicNumber);
+      // Then upload document images
+      await ApiService().uploadVerificationDocuments(
+        nicFrontPath: _frontFile!.path,
+        nicBackPath: _backFile!.path,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('NIC submitted successfully')),
+          const SnackBar(content: Text('NIC submitted for verification')),
         );
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to submit NIC: $e')),
+          SnackBar(content: Text('Failed: ${ApiService.errorMessage(e)}')),
         );
         setState(() => _isSubmitting = false);
       }
@@ -304,7 +453,7 @@ class _NicUploadScreenState extends State<NicUploadScreen> {
   @override
   Widget build(BuildContext context) {
     final nicFilled = _nicController.text.trim().isNotEmpty;
-    final canSubmit = _frontUploaded && _backUploaded && nicFilled;
+    final canSubmit = _frontFile != null && _backFile != null && nicFilled;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -324,8 +473,7 @@ class _NicUploadScreenState extends State<NicUploadScreen> {
             const SizedBox(height: 8),
             Text(
               'We need both sides of your National Identity Card to verify your identity.',
-              style: AppTypography.bodyMedium
-                  .copyWith(color: AppColors.textSecondary),
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
             ),
 
             const SizedBox(height: 24),
@@ -337,9 +485,7 @@ class _NicUploadScreenState extends State<NicUploadScreen> {
                 labelText: 'NIC Number',
                 hintText: 'e.g. 200012345678 or 901234567V',
                 prefixIcon: const Icon(Icons.badge_outlined),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: const BorderSide(color: AppColors.border),
@@ -350,20 +496,20 @@ class _NicUploadScreenState extends State<NicUploadScreen> {
 
             const SizedBox(height: 16),
 
-            _UploadCard(
+            _ImageUploadCard(
               label: 'NIC Front',
               icon: Icons.credit_card_outlined,
-              isUploaded: _frontUploaded,
-              onTap: () => setState(() => _frontUploaded = true),
+              file: _frontFile,
+              onTap: () => _pickImage(true),
             ),
 
             const SizedBox(height: 12),
 
-            _UploadCard(
+            _ImageUploadCard(
               label: 'NIC Back',
               icon: Icons.credit_card_outlined,
-              isUploaded: _backUploaded,
-              onTap: () => setState(() => _backUploaded = true),
+              file: _backFile,
+              onTap: () => _pickImage(false),
             ),
 
             const Spacer(),
@@ -395,8 +541,38 @@ class QualificationUploadScreen extends StatefulWidget {
 
 class _QualificationUploadScreenState
     extends State<QualificationUploadScreen> {
-  final List<String> _uploadedDocs = [];
+  final List<File> _selectedFiles = [];
   bool _isSubmitting = false;
+  final _picker = ImagePicker();
+
+  Future<void> _addDocument() async {
+    final picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (picked == null) return;
+    setState(() => _selectedFiles.add(File(picked.path)));
+  }
+
+  Future<void> _submitDocuments() async {
+    if (_selectedFiles.isEmpty) return;
+    setState(() => _isSubmitting = true);
+    try {
+      await ApiService().uploadVerificationDocuments(
+        qualificationPaths: _selectedFiles.map((f) => f.path).toList(),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Qualifications submitted for review')),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: ${ApiService.errorMessage(e)}')),
+        );
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -418,33 +594,39 @@ class _QualificationUploadScreenState
             const SizedBox(height: 8),
             Text(
               'Upload any certificates, trade licenses, or training records relevant to your services.',
-              style: AppTypography.bodyMedium
-                  .copyWith(color: AppColors.textSecondary),
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
             ),
 
             const SizedBox(height: 24),
 
-            // Uploaded docs list
-            ..._uploadedDocs.map((doc) => Padding(
+            // Selected files list
+            ..._selectedFiles.asMap().entries.map((entry) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: AppColors.successLight,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: AppColors.success.withValues(alpha: 0.3)),
+                      border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.description_outlined,
-                            color: AppColors.success, size: 20),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Image.file(entry.value, width: 40, height: 40, fit: BoxFit.cover),
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
-                            child: Text(doc,
-                                style: AppTypography.bodyMedium)),
-                        const Icon(Icons.check_circle_rounded,
-                            color: AppColors.success, size: 18),
+                          child: Text(
+                            entry.value.path.split('/').last,
+                            style: AppTypography.bodyMedium,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.error),
+                          onPressed: () => setState(() => _selectedFiles.removeAt(entry.key)),
+                        ),
                       ],
                     ),
                   ),
@@ -452,30 +634,23 @@ class _QualificationUploadScreenState
 
             // Add document button
             GestureDetector(
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Document upload coming soon')),
-                );
-              },
+              onTap: _addDocument,
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                      color: AppColors.border, style: BorderStyle.solid),
+                  border: Border.all(color: AppColors.border),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.add_circle_outline_rounded,
-                        color: AppColors.primary, size: 22),
+                    const Icon(Icons.add_circle_outline_rounded, color: AppColors.primary, size: 22),
                     const SizedBox(width: 8),
                     Text(
                       'Add Document',
-                      style: AppTypography.labelLarge
-                          .copyWith(color: AppColors.primary),
+                      style: AppTypography.labelLarge.copyWith(color: AppColors.primary),
                     ),
                   ],
                 ),
@@ -487,13 +662,7 @@ class _QualificationUploadScreenState
             DoerButton(
               label: 'Submit Documents',
               isLoading: _isSubmitting,
-              onPressed: _uploadedDocs.isNotEmpty
-                  ? () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Document upload coming soon')),
-                      );
-                    }
-                  : null,
+              onPressed: _selectedFiles.isNotEmpty ? _submitDocuments : null,
             ),
 
             const SizedBox(height: 16),
@@ -505,25 +674,27 @@ class _QualificationUploadScreenState
 }
 
 // ──────────────────────────────────────────────────────────────
-// UPLOAD CARD WIDGET
+// IMAGE UPLOAD CARD (with preview)
 // ──────────────────────────────────────────────────────────────
-class _UploadCard extends StatelessWidget {
+class _ImageUploadCard extends StatelessWidget {
   final String label;
   final IconData icon;
-  final bool isUploaded;
+  final File? file;
   final VoidCallback onTap;
 
-  const _UploadCard({
+  const _ImageUploadCard({
     required this.label,
     required this.icon,
-    required this.isUploaded,
+    required this.file,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isUploaded = file != null;
+
     return GestureDetector(
-      onTap: isUploaded ? null : onTap,
+      onTap: onTap,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(20),
@@ -536,29 +707,39 @@ class _UploadCard extends StatelessWidget {
                 : AppColors.border,
           ),
         ),
-        child: Column(
-          children: [
-            Icon(
-              isUploaded ? Icons.check_circle_rounded : icon,
-              size: 36,
-              color: isUploaded ? AppColors.success : AppColors.textTertiary,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              isUploaded ? '$label uploaded' : 'Tap to upload $label',
-              style: AppTypography.headlineSmall.copyWith(
-                color: isUploaded ? AppColors.success : AppColors.textSecondary,
+        child: isUploaded
+            ? Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(file!, width: 60, height: 60, fit: BoxFit.cover),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('$label uploaded', style: AppTypography.headlineSmall.copyWith(color: AppColors.success)),
+                        const SizedBox(height: 2),
+                        Text('Tap to change', style: AppTypography.labelSmall),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 24),
+                ],
+              )
+            : Column(
+                children: [
+                  Icon(icon, size: 36, color: AppColors.textTertiary),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Tap to upload $label',
+                    style: AppTypography.headlineSmall.copyWith(color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 4),
+                  Text('JPG, PNG or PDF - Max 5MB', style: AppTypography.labelSmall),
+                ],
               ),
-            ),
-            if (!isUploaded) ...[
-              const SizedBox(height: 4),
-              Text(
-                'JPG, PNG or PDF • Max 5MB',
-                style: AppTypography.labelSmall,
-              ),
-            ],
-          ],
-        ),
       ),
     );
   }

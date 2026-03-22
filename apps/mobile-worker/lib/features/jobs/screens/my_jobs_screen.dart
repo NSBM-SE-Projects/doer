@@ -170,7 +170,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
                             child: ListView.separated(
                               padding: const EdgeInsets.symmetric(horizontal: 20),
                               itemCount: _activeJobs.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              separatorBuilder: (_, _) => const SizedBox(height: 12),
                               itemBuilder: (_, i) {
                                 final job = _activeJobs[i];
                                 return ActiveJobCard(
@@ -201,7 +201,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
                             child: ListView.separated(
                               padding: const EdgeInsets.symmetric(horizontal: 20),
                               itemCount: _appliedJobs.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              separatorBuilder: (_, _) => const SizedBox(height: 12),
                               itemBuilder: (_, i) {
                                 final app = _appliedJobs[i];
                                 final job = app['job'] ?? {};
@@ -233,7 +233,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
                             child: ListView.separated(
                               padding: const EdgeInsets.symmetric(horizontal: 20),
                               itemCount: _completedJobs.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              separatorBuilder: (_, _) => const SizedBox(height: 12),
                               itemBuilder: (_, i) {
                                 final job = _completedJobs[i];
                                 return _CompletedJobCard(
