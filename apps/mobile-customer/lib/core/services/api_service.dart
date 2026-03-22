@@ -228,6 +228,11 @@ class ApiService {
     return resp.data;
   }
 
+  Future<List<dynamic>> getJobMatches(String jobId) async {
+    final resp = await _dio.get('/jobs/$jobId/matches');
+    return resp.data['matches'] as List;
+  }
+
   Future<Map<String, dynamic>> closeJob(String id) async {
     final resp = await _dio.patch('/jobs/$id/close');
     return resp.data;

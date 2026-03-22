@@ -125,6 +125,14 @@ export const adminRefundPayment = (jobId: string) =>
 export const adminCloseJob = (id: string) =>
   request<any>(`/admin/jobs/${id}/close`, { method: 'PATCH' });
 
+// Matching Demo
+export const getMatchingWorkers = () => request<any>('/admin/matching/workers');
+export const getMatchingJobs = () => request<any>('/admin/matching/jobs');
+export const simulatePresence = () =>
+  request<any>('/admin/matching/simulate', { method: 'POST' });
+export const runMatching = (jobId: string) =>
+  request<any>(`/admin/matching/run/${jobId}`, { method: 'POST' });
+
 // Disputes
 export const getDisputes = () => request<any>('/admin/disputes');
 

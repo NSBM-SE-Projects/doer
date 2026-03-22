@@ -9,6 +9,7 @@ import {
   FolderOpen,
   CreditCard,
   AlertTriangle,
+  Zap,
   LogOut,
   Menu,
   X,
@@ -23,6 +24,7 @@ const navItems = [
   { path: '/categories', label: 'Categories', icon: FolderOpen },
   { path: '/payments', label: 'Payments', icon: CreditCard },
   { path: '/disputes', label: 'Disputes', icon: AlertTriangle },
+  { path: '/matching', label: 'Matching Demo', icon: Zap },
 ];
 
 export default function Layout() {

@@ -12,6 +12,7 @@ import agoraRoutes from './agora';
 import uploadRoutes from './upload';
 import portfolioRoutes from './portfolio';
 import adminRoutes from './admin';
+import matchingRoutes from './matching';
 
 const router = Router();
 
@@ -19,6 +20,7 @@ router.use('/auth', authRoutes);
 router.use('/categories', categoryRoutes);
 router.use('/users', userRoutes);
 router.use('/jobs', jobRoutes);
+router.use('/jobs', matchingRoutes);
 router.use('/applications', applicationRoutes);
 router.use('/messages', messageRoutes);
 router.use('/notifications', notificationRoutes);
