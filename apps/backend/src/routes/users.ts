@@ -52,6 +52,11 @@ router.get(
               orderBy: { createdAt: 'desc' },
               take: 20,
             },
+            portfolio: {
+              include: { category: true },
+              orderBy: { createdAt: 'desc' },
+              take: 20,
+            },
           },
         },
       },
@@ -145,9 +150,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const { categoryId, available, lat, lng, radius } = req.query;
 
-    const where: any = {
-      verificationStatus: 'VERIFIED',
-    };
+    const where: any = {};
 
     if (available === 'true') where.isAvailable = true;
     if (categoryId) {
@@ -183,9 +186,15 @@ router.get(
                 user: { select: { name: true, avatarUrl: true } },
               },
             },
+            job: { select: { title: true } },
           },
           orderBy: { createdAt: 'desc' },
           take: 10,
+        },
+        portfolio: {
+          include: { category: true },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
         },
       },
     });

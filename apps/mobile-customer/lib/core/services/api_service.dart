@@ -250,11 +250,12 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> reviewJob(String jobId, {
-    required int rating, String? comment,
+    required int rating, String? comment, List<String>? photoUrls,
   }) async {
     final resp = await _dio.post('/jobs/$jobId/review', data: {
       'rating': rating,
       if (comment != null) 'comment': comment,
+      if (photoUrls != null && photoUrls.isNotEmpty) 'photoUrls': photoUrls,
     });
     return resp.data;
   }

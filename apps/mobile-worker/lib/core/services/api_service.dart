@@ -350,6 +350,50 @@ class ApiService {
   }
 
   // ════════════════════════════════════════════════════════════
+  // UPLOAD
+  // ════════════════════════════════════════════════════════════
+
+  Future<List<String>> uploadImages(List<String> base64Images, {String folder = 'doer'}) async {
+    final resp = await _dio.post('/upload/multiple', data: {
+      'images': base64Images,
+      'folder': folder,
+    });
+    return List<String>.from(resp.data['urls']);
+  }
+
+  Future<String> uploadImage(String base64Image, {String folder = 'doer'}) async {
+    final resp = await _dio.post('/upload', data: {
+      'image': base64Image,
+      'folder': folder,
+    });
+    return resp.data['url'];
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // PORTFOLIO
+  // ════════════════════════════════════════════════════════════
+
+  Future<List<dynamic>> getPortfolio(String workerId) async {
+    final resp = await _dio.get('/portfolio/$workerId');
+    return resp.data['portfolio'] as List;
+  }
+
+  Future<Map<String, dynamic>> addPortfolioItem({
+    required String imageUrl, String? caption, String? categoryId,
+  }) async {
+    final resp = await _dio.post('/portfolio', data: {
+      'imageUrl': imageUrl,
+      if (caption != null) 'caption': caption,
+      if (categoryId != null) 'categoryId': categoryId,
+    });
+    return resp.data['item'];
+  }
+
+  Future<void> deletePortfolioItem(String id) async {
+    await _dio.delete('/portfolio/$id');
+  }
+
+  // ════════════════════════════════════════════════════════════
   // HELPERS
   // ════════════════════════════════════════════════════════════
 
