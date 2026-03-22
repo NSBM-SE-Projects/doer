@@ -18,6 +18,9 @@ class SocketService {
   void Function(dynamic)? onNewMessage;
   void Function(dynamic)? onNewNotification;
   void Function(dynamic)? onUserTyping;
+  void Function(dynamic)? onIncomingCall;
+  void Function(dynamic)? onCallEnded;
+  void Function(dynamic)? onCallDeclined;
 
   Future<void> connect() async {
     if (_socket?.connected == true) return;
@@ -41,6 +44,9 @@ class SocketService {
     _socket!.on('new_message', (data) => onNewMessage?.call(data));
     _socket!.on('new_notification', (data) => onNewNotification?.call(data));
     _socket!.on('user_typing', (data) => onUserTyping?.call(data));
+    _socket!.on('incoming_call', (data) => onIncomingCall?.call(data));
+    _socket!.on('call_ended', (data) => onCallEnded?.call(data));
+    _socket!.on('call_declined', (data) => onCallDeclined?.call(data));
 
     _socket!.onDisconnect((_) => print('Socket disconnected'));
     _socket!.onConnectError((err) => print('Socket error: $err'));
@@ -49,6 +55,22 @@ class SocketService {
   void joinJob(String jobId) => _socket?.emit('join_job', jobId);
   void leaveJob(String jobId) => _socket?.emit('leave_job', jobId);
   void emitTyping(String jobId) => _socket?.emit('typing', {'jobId': jobId});
+
+  void callUser({required String targetUserId, required String channelName, required String callerName}) {
+    _socket?.emit('call_user', {
+      'targetUserId': targetUserId,
+      'channelName': channelName,
+      'callerName': callerName,
+    });
+  }
+
+  void endCall({required String targetUserId}) {
+    _socket?.emit('call_end', {'targetUserId': targetUserId});
+  }
+
+  void declineCall({required String targetUserId}) {
+    _socket?.emit('call_decline', {'targetUserId': targetUserId});
+  }
 
   void disconnect() {
     _socket?.disconnect();

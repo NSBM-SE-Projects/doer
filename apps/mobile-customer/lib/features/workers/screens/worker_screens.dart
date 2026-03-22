@@ -589,21 +589,27 @@ class BrowseWorkersScreen extends StatefulWidget {
 
 class _BrowseWorkersScreenState extends State<BrowseWorkersScreen> {
   List<dynamic> _workers = [];
+  List<dynamic> _allWorkers = [];
   bool _loading = true;
   String? _error;
+  String _searchQuery = '';
+  String? _selectedCategory;
+  bool _availableOnly = false;
 
   @override
   void initState() {
     super.initState();
+    _selectedCategory = widget.categoryFilter;
     _fetchWorkers();
   }
 
   Future<void> _fetchWorkers() async {
     try {
-      final data = await ApiService().getWorkers();
+      final data = await ApiService().getWorkers(available: _availableOnly ? true : null);
       if (mounted) {
         setState(() {
-          _workers = data;
+          _allWorkers = data;
+          _applyFilters();
           _loading = false;
         });
       }
@@ -615,6 +621,24 @@ class _BrowseWorkersScreenState extends State<BrowseWorkersScreen> {
         });
       }
     }
+  }
+
+  void _applyFilters() {
+    var filtered = List<dynamic>.from(_allWorkers);
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      filtered = filtered.where((w) {
+        final name = (w['user']?['name'] ?? '').toString().toLowerCase();
+        return name.contains(q);
+      }).toList();
+    }
+    if (_selectedCategory != null) {
+      filtered = filtered.where((w) {
+        final cats = w['categories'] as List? ?? [];
+        return cats.any((c) => (c['category']?['name'] ?? '').toString().toLowerCase() == _selectedCategory!.toLowerCase());
+      }).toList();
+    }
+    _workers = filtered;
   }
 
   String _badgeFromVerification(String? status) {
@@ -647,7 +671,12 @@ class _BrowseWorkersScreenState extends State<BrowseWorkersScreen> {
             child: DoerSearchBar(
               hint: 'Search workers by name or skill...',
               autofocus: false,
-              onChanged: (v) {},
+              onChanged: (v) {
+                setState(() {
+                  _searchQuery = v;
+                  _applyFilters();
+                });
+              },
             ),
           ),
           // Filter chips
@@ -657,13 +686,21 @@ class _BrowseWorkersScreenState extends State<BrowseWorkersScreen> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20),
               children: [
-                _FilterChip(label: 'Nearest', selected: true),
+                GestureDetector(
+                  onTap: () => setState(() { _availableOnly = !_availableOnly; _fetchWorkers(); }),
+                  child: _FilterChip(label: 'Available Now', selected: _availableOnly),
+                ),
                 const SizedBox(width: 8),
-                _FilterChip(label: 'Top Rated'),
-                const SizedBox(width: 8),
-                _FilterChip(label: 'Gold+'),
-                const SizedBox(width: 8),
-                _FilterChip(label: 'Available Now'),
+                ...AppCategories.all.map((cat) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () => setState(() {
+                      _selectedCategory = _selectedCategory == cat.name ? null : cat.name;
+                      _applyFilters();
+                    }),
+                    child: _FilterChip(label: cat.name, selected: _selectedCategory == cat.name),
+                  ),
+                )),
               ],
             ),
           ),
