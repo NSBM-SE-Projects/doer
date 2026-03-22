@@ -71,7 +71,7 @@ class ApiService {
       'email': email,
       'password': password,
       'name': name,
-      if (phone != null) 'phone': phone,
+      'phone': ?phone,
       'role': 'CUSTOMER',
     });
     await _saveJwt(resp.data['token']);
@@ -139,9 +139,9 @@ class ApiService {
     String? name, String? phone, String? avatarUrl,
   }) async {
     final resp = await _dio.put('/users/me', data: {
-      if (name != null) 'name': name,
-      if (phone != null) 'phone': phone,
-      if (avatarUrl != null) 'avatarUrl': avatarUrl,
+      'name': ?name,
+      'phone': ?phone,
+      'avatarUrl': ?avatarUrl,
     });
     return resp.data;
   }
@@ -150,9 +150,9 @@ class ApiService {
     String? address, double? latitude, double? longitude,
   }) async {
     final resp = await _dio.put('/users/me/customer', data: {
-      if (address != null) 'address': address,
-      if (latitude != null) 'latitude': latitude,
-      if (longitude != null) 'longitude': longitude,
+      'address': ?address,
+      'latitude': ?latitude,
+      'longitude': ?longitude,
     });
     return resp.data;
   }
@@ -173,7 +173,7 @@ class ApiService {
 
   Future<List<dynamic>> getWorkers({String? categoryId, bool? available}) async {
     final resp = await _dio.get('/users/workers', queryParameters: {
-      if (categoryId != null) 'categoryId': categoryId,
+      'categoryId': ?categoryId,
       if (available != null) 'available': available.toString(),
     });
     return resp.data['workers'] as List;
@@ -214,15 +214,14 @@ class ApiService {
       'title': title,
       'description': description,
       'categoryId': categoryId,
-      if (price != null) 'price': price,
-      if (budgetMin != null) 'budgetMin': budgetMin,
-      if (budgetMax != null) 'budgetMax': budgetMax,
-      if (urgency != null) 'urgency': urgency,
-      if (latitude != null) 'latitude': latitude,
-      if (longitude != null) 'longitude': longitude,
-      if (address != null) 'address': address,
-      if (imageUrls != null && imageUrls.isNotEmpty) 'imageUrls': imageUrls,
-      if (scheduledAt != null) 'scheduledAt': scheduledAt,
+      'price': ?price,
+      'budgetMin': ?budgetMin,
+      'budgetMax': ?budgetMax,
+      'urgency': ?urgency,
+      'latitude': ?latitude,
+      'longitude': ?longitude,
+      'address': ?address,
+      'scheduledAt': ?scheduledAt,
     });
     return resp.data;
   }
@@ -234,7 +233,7 @@ class ApiService {
 
   Future<Map<String, dynamic>> getMyJobs({String? status}) async {
     final resp = await _dio.get('/jobs/my', queryParameters: {
-      if (status != null) 'status': status,
+      'status': ?status,
     });
     return resp.data;
   }
@@ -254,7 +253,7 @@ class ApiService {
   }) async {
     final resp = await _dio.post('/jobs/$jobId/review', data: {
       'rating': rating,
-      if (comment != null) 'comment': comment,
+      'comment': ?comment,
     });
     return resp.data;
   }

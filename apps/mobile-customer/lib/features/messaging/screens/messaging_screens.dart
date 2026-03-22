@@ -62,7 +62,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
               onRefresh: _fetch,
               child: ListView.separated(
                 itemCount: _conversations.length,
-                separatorBuilder: (_, __) => const Divider(indent: 76, height: 0),
+                separatorBuilder: (_, _) => const Divider(indent: 76, height: 0),
                 itemBuilder: (_, i) {
                   final c = _conversations[i];
                   final other = c['otherUser'];

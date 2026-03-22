@@ -83,7 +83,7 @@ class LocationService {
           'lat': lat,
           'lng': lng,
           'radius_km': radiusKm,
-          if (services != null) 'services': services,
+          'services': ?services,
         }),
       );
       if (res.statusCode == 200) {
@@ -114,9 +114,9 @@ class LocationService {
           'household_id':    householdId,
           'district':        district,
           'needed_services': neededServices,
-          if (lat != null) 'lat': lat,
-          if (lng != null) 'lng': lng,
-          if (maxBudget != null) 'max_budget': maxBudget,
+          'lat': ?lat,
+          'lng': ?lng,
+          'max_budget': ?maxBudget,
           'radius_km':       radiusKm,
         }),
       );

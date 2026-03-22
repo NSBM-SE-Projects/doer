@@ -403,7 +403,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       itemCount: 5,
-                      separatorBuilder: (_, __) =>
+                      separatorBuilder: (_, _) =>
                           const SizedBox(width: 10),
                       itemBuilder: (_, i) => Container(
                         width: 120,
@@ -751,7 +751,7 @@ class _BrowseWorkersScreenState extends State<BrowseWorkersScreen> {
                         : ListView.separated(
                             padding: const EdgeInsets.symmetric(horizontal: 20),
                             itemCount: _workers.length,
-                            separatorBuilder: (_, __) =>
+                            separatorBuilder: (_, _) =>
                                 const SizedBox(height: 12),
                             itemBuilder: (_, index) {
                               final w = _workers[index] as Map<String, dynamic>;
