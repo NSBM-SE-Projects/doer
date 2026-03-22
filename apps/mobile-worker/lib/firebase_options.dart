@@ -44,9 +44,10 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyDlYooo-DvtaSPSQVuPJ74YUj1HwcTG-nM',
-    appId: '1:563057133005:android:25d7b0a498505bfbbeb084',
+    appId: '1:563057133005:android:7ad00b9ed2844981beb084',
     messagingSenderId: '563057133005',
     projectId: 'doer-home-services',
     storageBucket: 'doer-home-services.firebasestorage.app',
   );
+
 }

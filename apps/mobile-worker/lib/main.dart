@@ -13,6 +13,18 @@ import 'features/video/incoming_call_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+/// Removes the stretching/glow overscroll effect on all scrollables.
+class NoStretchScrollBehavior extends ScrollBehavior {
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -62,6 +74,7 @@ class DoerWorkerApp extends StatelessWidget {
     return MaterialApp(
       title: 'Doer Worker',
       debugShowCheckedModeBanner: false,
+      scrollBehavior: NoStretchScrollBehavior(),
       theme: AppTheme.light,
       navigatorKey: navigatorKey,
       builder: (context, child) {
