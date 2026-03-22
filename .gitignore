@@ -36,3 +36,5 @@ apps/mobile-worker/.dart_tool/
 apps/mobile-worker/build/
 *.g.dart
 *.freezed.dart
+
+TODO.md

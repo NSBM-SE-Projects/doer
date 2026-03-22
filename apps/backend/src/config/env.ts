@@ -19,6 +19,8 @@ const envSchema = z.object({
   PAYHERE_MERCHANT_ID: z.string().optional(),
   PAYHERE_SECRET: z.string().optional(),
   GOOGLE_MAPS_API_KEY: z.string().optional(),
+  AGORA_APP_ID: z.string().optional(),
+  AGORA_APP_CERTIFICATE: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

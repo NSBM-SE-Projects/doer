@@ -23,6 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _authService = AuthService();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
   String? _errorMessage;
 
   @override
@@ -73,6 +74,40 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() {
           _errorMessage = e.toString();
           _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() {
+      _isGoogleLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      await _authService.signInWithGoogle();
+      if (mounted) {
+        try {
+          final data = await ApiService().getMe();
+          final role = data['user']?['role'];
+          if (role != 'WORKER' && role != 'ADMIN') {
+            await _authService.signOut();
+            if (mounted) {
+              setState(() {
+                _errorMessage = 'This app is for workers only. Please use the Customer app.';
+                _isGoogleLoading = false;
+              });
+            }
+            return;
+          }
+        } catch (_) {}
+        if (mounted) Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+          _isGoogleLoading = false;
         });
       }
     }
@@ -222,13 +257,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 width: double.infinity,
                 height: AppSizing.buttonHeight,
                 child: OutlinedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Google sign-in coming soon')),
-                    );
-                  },
-                  icon: const Icon(Icons.g_mobiledata_rounded,
-                      size: 24, color: AppColors.textPrimary),
+                  onPressed: _isGoogleLoading ? null : _handleGoogleSignIn,
+                  icon: _isGoogleLoading
+                      ? const SizedBox(
+                          width: 20, height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.g_mobiledata_rounded,
+                          size: 24, color: AppColors.textPrimary),
                   label: Text(
                     'Continue with Google',
                     style: AppTypography.labelLarge,

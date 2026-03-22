@@ -43,11 +43,18 @@ class _MyJobsScreenState extends State<MyJobsScreen>
           j['status'] == 'ASSIGNED' || j['status'] == 'IN_PROGRESS'
         ).toList();
         _appliedJobs = applications;
-        _completedJobs = jobs.where((j) => j['status'] == 'COMPLETED').toList();
+        _completedJobs = jobs.where((j) =>
+          j['status'] == 'COMPLETED' || j['status'] == 'REVIEWING' || j['status'] == 'CLOSED'
+        ).toList();
         _isLoading = false;
       });
-    } catch (_) {
+    } catch (e) {
       setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ApiService.errorMessage(e))),
+        );
+      }
     }
   }
 
@@ -76,7 +83,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
       clientRating: (job['customer']?['user']?['customerProfile']?['rating'] ?? 0).toDouble(),
       clientJobsPosted: 0,
       description: job['description'] ?? '',
-      scheduledDate: _formatDate(job['scheduledDate']),
+      scheduledDate: _formatDate(job['scheduledAt']),
       address: job['address'] ?? '',
       status: job['status'],
     );
@@ -149,14 +156,15 @@ class _MyJobsScreenState extends State<MyJobsScreen>
                                   status: job['status'] == 'IN_PROGRESS'
                                       ? JobStatus.inProgress : JobStatus.workerAccepted,
                                   clientName: job['customer']?['user']?['name'] ?? 'Customer',
-                                  scheduledDate: '',
+                                  scheduledDate: _formatDate(job['scheduledAt']),
                                   budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : '',
-                                  onTap: () {
-                                    Navigator.pushNamed(
+                                  onTap: () async {
+                                    await Navigator.pushNamed(
                                       context,
                                       AppRoutes.jobDetail,
                                       arguments: _jobDetailFromMap(job),
                                     );
+                                    _fetchJobs();
                                   },
                                 );
                               },
@@ -182,12 +190,13 @@ class _MyJobsScreenState extends State<MyJobsScreen>
                                   status: status,
                                   budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : 'Negotiable',
                                   appliedAt: _formatDate(app['createdAt']),
-                                  onTap: () {
-                                    Navigator.pushNamed(
+                                  onTap: () async {
+                                    await Navigator.pushNamed(
                                       context,
                                       AppRoutes.jobDetail,
                                       arguments: _jobDetailFromMap(job),
                                     );
+                                    _fetchJobs();
                                   },
                                 );
                               },

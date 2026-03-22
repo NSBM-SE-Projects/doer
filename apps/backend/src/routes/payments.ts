@@ -25,13 +25,39 @@ router.post(
     if (job.payment) throw AppError.conflict('Payment already exists for this job');
     if (!job.price) throw AppError.badRequest('Job has no price set');
 
+    // Create payment and immediately mark as completed (direct transfer, no PayHere)
     const payment = await prisma.payment.create({
       data: {
         amount: job.price,
         jobId,
-        status: 'PENDING',
+        status: 'COMPLETED',
       },
     });
+
+    // Update job status to REVIEWING
+    await prisma.job.update({
+      where: { id: jobId },
+      data: { status: 'REVIEWING' },
+    });
+
+    // Notify the worker that payment has been released
+    const workerProfile = await prisma.workerProfile.findUnique({
+      where: { id: job.workerId ?? undefined },
+    });
+    if (workerProfile) {
+      await createNotification(
+        workerProfile.userId,
+        'Payment Received',
+        `Rs. ${job.price} has been released to you for "${job.title}"`
+      );
+    }
+
+    // Notify customer
+    await createNotification(
+      req.user!.userId,
+      'Payment Confirmed',
+      `Rs. ${job.price} has been released to the worker for "${job.title}"`
+    );
 
     res.status(201).json({ payment });
   })
@@ -61,7 +87,8 @@ router.get(
 // PATCH /api/payments/:jobId/status — update payment status (for PayHere webhook or manual)
 router.patch(
   '/:jobId/status',
-  asyncHandler(async (req, res) => {
+  authenticate,
+  asyncHandler(async (req: AuthRequest, res: Response) => {
     const jobId = req.params.jobId as string;
     const { status, payhereRef } = z.object({
       status: z.enum(['PENDING', 'COMPLETED', 'FAILED', 'REFUNDED']),

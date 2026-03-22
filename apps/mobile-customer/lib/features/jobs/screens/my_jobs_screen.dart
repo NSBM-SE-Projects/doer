@@ -5,6 +5,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/services/api_service.dart';
 import '../../messaging/screens/messaging_screens.dart';
+import '../../reviews/screens/review_notification_screens.dart';
 
 // ──────────────────────────────────────────────────────────────
 // MY JOBS SCREEN
@@ -45,8 +46,13 @@ class _MyJobsScreenState extends State<MyJobsScreen>
         _cancelledJobs = jobs.where((j) => j['status'] == 'CANCELLED').toList();
         _isLoading = false;
       });
-    } catch (_) {
+    } catch (e) {
       setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ApiService.errorMessage(e))),
+        );
+      }
     }
   }
 
@@ -335,17 +341,19 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
   }
 
   Future<void> _releasePayment() async {
+    final price = _formatPrice(_job?['price']);
+    final workerName = _job?['worker']?['user']?['name'] ?? 'the worker';
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Release Payment'),
-        content: Text('Release ${_formatPrice(_job?['price'])} to the worker? This confirms the job is complete and payment will be sent.'),
+        content: Text('Release $price directly to $workerName? This confirms the job is complete.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: AppColors.primary),
-            child: const Text('Release Payment'),
+            child: const Text('Release Funds'),
           ),
         ],
       ),
@@ -357,13 +365,13 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       await ApiService().createPayment(widget.jobId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Payment released successfully')),
+        SnackBar(content: Text('$price released to $workerName'), backgroundColor: AppColors.success),
       );
       _fetchJob();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to release payment: $e')),
+        SnackBar(content: Text(ApiService.errorMessage(e))),
       );
     } finally {
       if (mounted) setState(() => _actionLoading = false);
@@ -393,8 +401,12 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     final completedAt = _formatDate(_job?['completedAt']);
 
     // Status ordering for progress calculation
+    // Normalize statuses to the 4-step timeline
+    final normalizedStatus = status == 'APPLICATIONS_RECEIVED' ? 'OPEN'
+        : (status == 'REVIEWING' || status == 'CLOSED') ? 'COMPLETED'
+        : status;
     const statusOrder = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED'];
-    final currentIndex = statusOrder.indexOf(status);
+    final currentIndex = statusOrder.indexOf(normalizedStatus);
 
     if (status == 'CANCELLED') {
       return [
@@ -454,7 +466,35 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         ),
         title: const Text('Job Details'),
         actions: [
-          IconButton(icon: const Icon(Icons.more_vert_rounded), onPressed: () {}),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded),
+            onSelected: (value) async {
+              if (value == 'cancel' && _job != null) {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Cancel Job'),
+                    content: const Text('Are you sure you want to cancel this job?'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Yes, Cancel', style: TextStyle(color: AppColors.error))),
+                    ],
+                  ),
+                );
+                if (confirmed == true) {
+                  try {
+                    await ApiService().cancelJob(widget.jobId);
+                    if (mounted) _fetchJob();
+                  } catch (e) {
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.errorMessage(e))));
+                  }
+                }
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'cancel', child: Text('Cancel Job')),
+            ],
+          ),
         ],
       ),
       body: _isLoading
@@ -602,7 +642,18 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                   _ActionIcon(
                       icon: Icons.phone_outlined,
                       color: AppColors.success,
-                      onTap: () {}),
+                      onTap: () {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Contact Support'),
+                            content: const Text('For support, email us at:\nsupport@doer.lk'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+                            ],
+                          ),
+                        );
+                      }),
                 ],
               ),
             ),
@@ -742,11 +793,29 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                     isOutlined: true,
                     onPressed: _actionLoading ? null : _cancelJob)),
           if (canCancel && canRelease) const SizedBox(width: 12),
-          if (canRelease)
+          if (canRelease) ...[
             Expanded(
                 child: DoerButton(
-                    label: 'Release Payment',
+                    label: 'Confirm & Pay',
                     onPressed: _actionLoading ? null : _releasePayment)),
+            const SizedBox(width: 12),
+            Expanded(
+                child: DoerButton(
+                    label: 'Leave Review',
+                    isOutlined: true,
+                    icon: Icons.star_outline_rounded,
+                    onPressed: () {
+                      final workerName = _job?['worker']?['user']?['name'] ?? 'Worker';
+                      final jobTitle = _job?['title'] ?? '';
+                      Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => RateReviewScreen(
+                          jobId: widget.jobId,
+                          workerName: workerName,
+                          jobTitle: jobTitle,
+                        ),
+                      )).then((_) => _fetchJob());
+                    })),
+          ],
         ],
       ),
     );

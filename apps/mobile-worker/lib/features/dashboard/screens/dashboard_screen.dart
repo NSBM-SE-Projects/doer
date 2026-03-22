@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
@@ -27,6 +28,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<dynamic> _activeJobs = [];
   double _totalEarnings = 0;
   double _pendingPayout = 0;
+  double? _workerLat;
+  double? _workerLng;
+
+  double _calcDistance(double? lat, double? lng) {
+    if (_workerLat == null || _workerLng == null || lat == null || lng == null) return 0;
+    const p = 0.017453292519943295;
+    final a = 0.5 - cos((lat - _workerLat!) * p) / 2 +
+        cos(_workerLat! * p) * cos(lat * p) * (1 - cos((lng - _workerLng!) * p)) / 2;
+    return 12742 * asin(sqrt(a));
+  }
 
   @override
   void initState() {
@@ -49,6 +60,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       setState(() {
         _workerName = user['name'] ?? AuthService().currentUser?.displayName ?? 'Worker';
+        _workerLat = (wp?['lat'] as num?)?.toDouble();
+        _workerLng = (wp?['lng'] as num?)?.toDouble();
         _isAvailable = wp?['isAvailable'] ?? true;
         _verificationStatus = wp?['verificationStatus'] ?? 'PENDING';
         _rating = (wp?['rating'] ?? 0).toDouble();
@@ -105,7 +118,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       category: catName,
       categoryIcon: _getCategoryIcon(catName),
       budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : 'Negotiable',
-      distanceKm: 0,
+      distanceKm: _calcDistance((job['lat'] as num?)?.toDouble(), (job['lng'] as num?)?.toDouble()),
       postedAt: _timeAgo(job['createdAt']),
       clientName: job['customer']?['user']?['name'] ?? 'Customer',
       clientRating: (job['customer']?['user']?['customerProfile']?['rating'] ?? 0).toDouble(),
@@ -114,6 +127,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       scheduledDate: job['scheduledDate'] ?? '',
       address: job['address'] ?? '',
       status: job['status'],
+      lat: (job['lat'] as num?)?.toDouble(),
+      lng: (job['lng'] as num?)?.toDouble(),
     );
   }
 
@@ -364,7 +379,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     ? 'Rs. ${job['price'].toStringAsFixed(0)}'
                                     : 'Negotiable',
                                 location: job['address'] ?? '',
-                                distance: 0,
+                                distance: _calcDistance((job['lat'] as num?)?.toDouble(), (job['lng'] as num?)?.toDouble()),
                                 postedAt: _timeAgo(job['createdAt']),
                                 onTap: () {
                                   Navigator.pushNamed(

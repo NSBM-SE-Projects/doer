@@ -41,6 +41,15 @@ dependencies:
   agora_rtc_engine: ^6.5.0
   permission_handler: ^11.3.1
 
+  # URL Launcher
+  url_launcher: ^6.3.1
+
+  # Google Sign-In
+  google_sign_in: ^6.2.2
+
+  # Local Notifications
+  flutter_local_notifications: ^18.0.1
+
   # Utils
   intl: ^0.20.2
   cupertino_icons: ^1.0.8
