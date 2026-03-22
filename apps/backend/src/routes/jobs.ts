@@ -23,6 +23,7 @@ const createJobSchema = z.object({
   address: z.string().optional(),
   scheduledAt: z.string().datetime().optional(),
   scheduledEnd: z.string().datetime().optional(),
+  imageUrls: z.array(z.string()).optional(),
 });
 
 const updateJobSchema = z.object({
@@ -83,6 +84,7 @@ router.post(
         address: body.address,
         scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : undefined,
         scheduledEnd: body.scheduledEnd ? new Date(body.scheduledEnd) : undefined,
+        imageUrls: body.imageUrls || [],
         customerId: customerProfile.id,
         categoryId: body.categoryId,
       },
@@ -173,7 +175,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const { categoryId } = req.query;
 
-    const where: any = { status: 'OPEN' };
+    const where: any = { status: { in: ['OPEN', 'APPLICATIONS_RECEIVED'] } };
     if (categoryId) where.categoryId = categoryId;
 
     const jobs = await prisma.job.findMany({
@@ -382,6 +384,21 @@ router.patch(
       },
     });
 
+    // Notify the other party
+    if (isCustomer && job.worker) {
+      await createNotification(
+        job.worker.userId,
+        'Job Cancelled',
+        `The customer cancelled "${job.title}"`
+      );
+    } else if (isWorker) {
+      await createNotification(
+        job.customer.userId,
+        'Job Cancelled',
+        `The worker cancelled "${job.title}". You can accept another application.`
+      );
+    }
+
     res.json({ job: updated });
   })
 );
@@ -403,7 +420,9 @@ router.post(
     });
     if (!job) throw AppError.notFound('Job not found');
     if (job.customer.userId !== req.user!.userId) throw AppError.forbidden('Not your job');
-    if (job.status !== 'COMPLETED') throw AppError.badRequest('Can only review completed jobs');
+    if (job.status !== 'COMPLETED' && job.status !== 'REVIEWING') {
+      throw AppError.badRequest('Can only review completed or reviewing jobs');
+    }
     if (job.review) throw AppError.conflict('Review already exists');
     if (!job.workerId) throw AppError.badRequest('No worker assigned');
 
@@ -427,10 +446,13 @@ router.post(
       data: { rating: avgResult._avg.rating || 0 },
     });
 
-    // Move job to REVIEWING status
+    // Check if payment is also done — if so, auto-close the job
+    const payment = await prisma.payment.findUnique({ where: { jobId: job.id } });
+    const newStatus = payment?.status === 'COMPLETED' ? 'CLOSED' : 'REVIEWING';
+
     await prisma.job.update({
       where: { id: req.params.id as string },
-      data: { status: 'REVIEWING' },
+      data: { status: newStatus },
     });
 
     res.status(201).json({ review });

@@ -201,11 +201,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     if (_activeJobCount > 0)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary, borderRadius: BorderRadius.circular(16)),
-                          child: Row(children: [
+                        child: GestureDetector(
+                          onTap: () => Navigator.pushNamed(context, '/my-jobs'),
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary, borderRadius: BorderRadius.circular(16)),
+                            child: Row(children: [
                             Container(
                               width: 44, height: 44,
                               decoration: BoxDecoration(
@@ -224,6 +226,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                             const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 24),
                           ]),
+                          ),
                         ),
                       ),
 

@@ -42,6 +42,16 @@ router.get(
             categories: {
               include: { category: true },
             },
+            reviews: {
+              include: {
+                customer: {
+                  include: { user: { select: { name: true, avatarUrl: true } } },
+                },
+                job: { select: { title: true } },
+              },
+              orderBy: { createdAt: 'desc' },
+              take: 20,
+            },
           },
         },
       },

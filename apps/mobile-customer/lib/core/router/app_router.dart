@@ -12,6 +12,7 @@ import '../../features/workers/screens/worker_screens.dart';
 import '../../features/payments/screens/payment_screens.dart';
 import '../../features/reviews/screens/review_notification_screens.dart';
 import '../../features/profile/screens/profile_screens.dart';
+import '../../features/jobs/screens/my_jobs_screen.dart';
 
 // ──────────────────────────────────────────────────────────────
 // APP ROUTER
@@ -57,6 +58,8 @@ Route<dynamic> generateRoute(RouteSettings settings) {
       return _buildRoute(const ForgotPasswordScreen());
     case AppRoutes.home:
       return _buildRoute(const MainShell());
+    case '/my-jobs':
+      return _buildRoute(const MyJobsScreen());
     case AppRoutes.search:
       return _buildRoute(const SearchScreen());
     case AppRoutes.postJob:

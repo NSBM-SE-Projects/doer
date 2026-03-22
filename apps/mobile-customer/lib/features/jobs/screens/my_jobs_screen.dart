@@ -42,7 +42,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
       final jobs = data['jobs'] as List;
       setState(() {
         _activeJobs = jobs.where((j) => j['status'] == 'OPEN' || j['status'] == 'APPLICATIONS_RECEIVED' || j['status'] == 'ASSIGNED' || j['status'] == 'IN_PROGRESS').toList();
-        _completedJobs = jobs.where((j) => j['status'] == 'COMPLETED').toList();
+        _completedJobs = jobs.where((j) => j['status'] == 'COMPLETED' || j['status'] == 'REVIEWING' || j['status'] == 'CLOSED').toList();
         _cancelledJobs = jobs.where((j) => j['status'] == 'CANCELLED').toList();
         _isLoading = false;
       });
@@ -770,13 +770,16 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
 
   Widget? _buildBottomBar() {
     final status = _job?['status']?.toString().toUpperCase() ?? '';
-    // Don't show action buttons for terminal states
     if (status == 'CANCELLED' || status == 'CLOSED') return null;
 
     final canCancel = status == 'OPEN' || status == 'ASSIGNED' || status == 'IN_PROGRESS';
-    final canRelease = status == 'COMPLETED';
+    final isCompletedOrReviewing = status == 'COMPLETED' || status == 'REVIEWING';
+    final hasPayment = _job?['payment'] != null;
+    final hasReview = _job?['review'] != null;
+    final canPay = isCompletedOrReviewing && !hasPayment;
+    final canReview = isCompletedOrReviewing && !hasReview;
 
-    if (!canCancel && !canRelease) return null;
+    if (!canCancel && !canPay && !canReview) return null;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -792,17 +795,18 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                     label: 'Cancel Job',
                     isOutlined: true,
                     onPressed: _actionLoading ? null : _cancelJob)),
-          if (canCancel && canRelease) const SizedBox(width: 12),
-          if (canRelease) ...[
+          if (canCancel && (canPay || canReview)) const SizedBox(width: 12),
+          if (canPay)
             Expanded(
                 child: DoerButton(
                     label: 'Confirm & Pay',
                     onPressed: _actionLoading ? null : _releasePayment)),
-            const SizedBox(width: 12),
+          if (canPay && canReview) const SizedBox(width: 12),
+          if (canReview)
             Expanded(
                 child: DoerButton(
                     label: 'Leave Review',
-                    isOutlined: true,
+                    isOutlined: canPay,
                     icon: Icons.star_outline_rounded,
                     onPressed: () {
                       final workerName = _job?['worker']?['user']?['name'] ?? 'Worker';
@@ -815,7 +819,6 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                         ),
                       )).then((_) => _fetchJob());
                     })),
-          ],
         ],
       ),
     );

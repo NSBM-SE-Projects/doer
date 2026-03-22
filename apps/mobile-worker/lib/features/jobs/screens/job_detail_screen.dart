@@ -26,6 +26,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
   bool _applying = false;
   late String _currentStatus;
   bool _actionLoading = false;
+  Map<String, dynamic>? _liveJob;
 
   @override
   void initState() {
@@ -34,23 +35,101 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     _refreshStatus();
   }
 
-  /// Fetch the latest job status from the backend
+  List<String> get _jobImages {
+    final urls = _liveJob?['imageUrls'] as List?;
+    if (urls != null && urls.isNotEmpty) return List<String>.from(urls);
+    return [];
+  }
+
+  void _showFullImage(BuildContext context, String url) {
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white),
+        body: Center(
+          child: InteractiveViewer(
+            child: Image.network(url, fit: BoxFit.contain),
+          ),
+        ),
+      ),
+    ));
+  }
+
+  double? get _jobLat => _liveJob?['latitude'] != null
+      ? (_liveJob!['latitude'] as num).toDouble()
+      : widget.job.lat;
+
+  double? get _jobLng => _liveJob?['longitude'] != null
+      ? (_liveJob!['longitude'] as num).toDouble()
+      : widget.job.lng;
+
+  /// Fetch the latest job data from the backend
   Future<void> _refreshStatus() async {
     try {
       final job = await ApiService().getJob(widget.job.id);
       if (mounted) {
         final status = (job['status'] as String?)?.toUpperCase() ?? _currentStatus;
-        setState(() => _currentStatus = status);
+        setState(() {
+          _currentStatus = status;
+          _liveJob = job;
+        });
       }
     } catch (_) {
-      // Keep using the passed-in status if fetch fails
+      // Keep using the passed-in data if fetch fails
     }
   }
 
   Future<void> _applyToJob() async {
+    final messageController = TextEditingController();
+    final priceController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Apply for this Job'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: priceController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Your Price (Rs.)',
+                hintText: 'Leave empty to accept posted budget',
+                prefixIcon: Icon(Icons.attach_money_rounded, size: 20),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: messageController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Message to Client',
+                hintText: 'Introduce yourself and why you\'re a good fit...',
+                prefixIcon: Icon(Icons.message_outlined, size: 20),
+                alignLabelWithHint: true,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Submit Application')),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
     setState(() => _applying = true);
     try {
-      await ApiService().applyToJob(widget.job.id);
+      final price = double.tryParse(priceController.text);
+      final message = messageController.text.trim();
+      await ApiService().applyToJob(
+        widget.job.id,
+        message: message.isNotEmpty ? message : null,
+        price: price,
+      );
       if (mounted) {
         setState(() {
           _applying = false;
@@ -542,6 +621,47 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
             ),
           ),
 
+          // ── Job Photos ──
+          if (_jobImages.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Photos', style: AppTypography.headlineMedium),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 160,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _jobImages.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 10),
+                        itemBuilder: (_, i) => GestureDetector(
+                          onTap: () => _showFullImage(context, _jobImages[i]),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.network(
+                              _jobImages[i],
+                              width: 200,
+                              height: 160,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                width: 200, height: 160,
+                                color: AppColors.surfaceVariant,
+                                child: const Icon(Icons.broken_image_outlined, color: AppColors.textTertiary),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+
           // ── Description ──
           SliverToBoxAdapter(
             child: Padding(
@@ -576,15 +696,33 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                   _DetailRow(
                     icon: Icons.calendar_today_outlined,
                     label: 'Scheduled',
-                    value: job.scheduledDate,
+                    value: job.scheduledDate.isNotEmpty ? job.scheduledDate : 'Flexible',
                   ),
+                  if (job.scheduledTime != null && job.scheduledTime!.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    _DetailRow(
+                      icon: Icons.access_time_rounded,
+                      label: 'Time',
+                      value: job.scheduledTime!,
+                    ),
+                  ],
+                  if (job.urgency != null && job.urgency!.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    _DetailRow(
+                      icon: job.urgency == 'EMERGENCY' ? Icons.emergency_rounded
+                          : job.urgency == 'URGENT' ? Icons.bolt_rounded
+                          : Icons.schedule_outlined,
+                      label: 'Urgency',
+                      value: job.urgency!,
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   _DetailRow(
                     icon: Icons.location_on_outlined,
                     label: 'Location',
-                    value: job.address,
+                    value: job.address.isNotEmpty ? job.address : 'Not specified',
                   ),
-                  if (job.estimatedDuration != null) ...[
+                  if (job.estimatedDuration != null && job.estimatedDuration!.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     _DetailRow(
                       icon: Icons.timer_outlined,
@@ -609,8 +747,8 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                   const SizedBox(height: 12),
                   GestureDetector(
                     onTap: () async {
-                      final lat = widget.job.lat;
-                      final lng = widget.job.lng;
+                      final lat = _jobLat;
+                      final lng = _jobLng;
                       Uri uri;
                       if (lat != null && lng != null) {
                         uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
@@ -630,16 +768,16 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                       clipBehavior: Clip.antiAlias,
                       child: Stack(
                         children: [
-                          if (widget.job.lat != null && widget.job.lng != null)
+                          if (_jobLat != null && _jobLng != null)
                             GoogleMap(
                               initialCameraPosition: CameraPosition(
-                                target: LatLng(widget.job.lat!, widget.job.lng!),
+                                target: LatLng(_jobLat!, _jobLng!),
                                 zoom: 15,
                               ),
                               markers: {
                                 Marker(
                                   markerId: const MarkerId('job'),
-                                  position: LatLng(widget.job.lat!, widget.job.lng!),
+                                  position: LatLng(_jobLat!, _jobLng!),
                                 ),
                               },
                               zoomControlsEnabled: false,
@@ -784,6 +922,8 @@ class JobDetailData {
   final String? status;
   final double? lat;
   final double? lng;
+  final String? urgency;
+  final String? scheduledTime;
 
   const JobDetailData({
     required this.id,
@@ -803,6 +943,8 @@ class JobDetailData {
     this.status,
     this.lat,
     this.lng,
+    this.urgency,
+    this.scheduledTime,
   });
 }
 
