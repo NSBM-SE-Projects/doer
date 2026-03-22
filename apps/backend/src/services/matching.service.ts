@@ -11,11 +11,11 @@ const W_COMPLETION = 0.20;
 const W_BADGE = 0.15;
 
 const BADGE_SCORES: Record<string, number> = {
-  platinum: 1.0,
-  gold: 0.8,
-  silver: 0.6,
-  bronze: 0.4,
-  trainee: 0.2,
+  PLATINUM: 1.0, platinum: 1.0,
+  GOLD: 0.8, gold: 0.8,
+  SILVER: 0.6, silver: 0.6,
+  BRONZE: 0.4, bronze: 0.4,
+  TRAINEE: 0.2, trainee: 0.2,
 };
 
 // Haversine distance in km

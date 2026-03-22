@@ -9,6 +9,8 @@ import notificationRoutes from './notifications';
 import paymentRoutes from './payments';
 import mapRoutes from './maps';
 import agoraRoutes from './agora';
+import uploadRoutes from './upload';
+import portfolioRoutes from './portfolio';
 import adminRoutes from './admin';
 import matchingRoutes from './matching';
 
@@ -25,6 +27,8 @@ router.use('/notifications', notificationRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/maps', mapRoutes);
 router.use('/agora', agoraRoutes);
+router.use('/upload', uploadRoutes);
+router.use('/portfolio', portfolioRoutes);
 router.use('/admin', adminRoutes);
 
 export default router;

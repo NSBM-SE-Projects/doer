@@ -31,25 +31,25 @@ interface WorkerSeed {
 
 const WORKERS: WorkerSeed[] = [
   // Plumbing workers (category 0)
-  { name: 'Kamal Perera',     email: 'kamal@test.lk',     lat: 6.9300, lng: 79.8650, rating: 4.8, totalJobs: 120, completionRate: 0.95, badgeLevel: 'platinum', verified: true,  categoryIndex: 0 },
-  { name: 'Nimal Silva',      email: 'nimal@test.lk',     lat: 6.9180, lng: 79.8580, rating: 4.2, totalJobs: 65,  completionRate: 0.88, badgeLevel: 'gold',     verified: true,  categoryIndex: 0 },
-  { name: 'Sunil Fernando',   email: 'sunil@test.lk',     lat: 6.9350, lng: 79.8700, rating: 3.5, totalJobs: 30,  completionRate: 0.80, badgeLevel: 'silver',   verified: true,  categoryIndex: 0 },
-  { name: 'Ruwan Jayasena',   email: 'ruwan@test.lk',     lat: 6.9100, lng: 79.8500, rating: 3.0, totalJobs: 8,   completionRate: 0.75, badgeLevel: 'bronze',   verified: true,  categoryIndex: 0 },
-  { name: 'Chaminda Bandara', email: 'chaminda@test.lk',  lat: 6.9400, lng: 79.8800, rating: 0,   totalJobs: 2,   completionRate: 1.0,  badgeLevel: 'trainee',  verified: false, categoryIndex: 0 },
+  { name: 'Kamal Perera',     email: 'kamal@test.lk',     lat: 6.9300, lng: 79.8650, rating: 4.8, totalJobs: 120, completionRate: 0.95, badgeLevel: 'PLATINUM', verified: true,  categoryIndex: 0 },
+  { name: 'Nimal Silva',      email: 'nimal@test.lk',     lat: 6.9180, lng: 79.8580, rating: 4.2, totalJobs: 65,  completionRate: 0.88, badgeLevel: 'GOLD',     verified: true,  categoryIndex: 0 },
+  { name: 'Sunil Fernando',   email: 'sunil@test.lk',     lat: 6.9350, lng: 79.8700, rating: 3.5, totalJobs: 30,  completionRate: 0.80, badgeLevel: 'SILVER',   verified: true,  categoryIndex: 0 },
+  { name: 'Ruwan Jayasena',   email: 'ruwan@test.lk',     lat: 6.9100, lng: 79.8500, rating: 3.0, totalJobs: 8,   completionRate: 0.75, badgeLevel: 'BRONZE',   verified: true,  categoryIndex: 0 },
+  { name: 'Chaminda Bandara', email: 'chaminda@test.lk',  lat: 6.9400, lng: 79.8800, rating: 0,   totalJobs: 2,   completionRate: 1.0,  badgeLevel: 'TRAINEE',  verified: false, categoryIndex: 0 },
 
   // Electrical workers (category 1)
-  { name: 'Ashan Wijesinghe', email: 'ashan@test.lk',     lat: 6.9220, lng: 79.8550, rating: 4.9, totalJobs: 150, completionRate: 0.97, badgeLevel: 'platinum', verified: true,  categoryIndex: 1 },
-  { name: 'Dilshan Kumara',   email: 'dilshan@test.lk',   lat: 6.9280, lng: 79.8630, rating: 4.5, totalJobs: 55,  completionRate: 0.90, badgeLevel: 'gold',     verified: true,  categoryIndex: 1 },
-  { name: 'Pradeep Ranatunga',email: 'pradeep@test.lk',   lat: 6.9150, lng: 79.8480, rating: 3.8, totalJobs: 25,  completionRate: 0.84, badgeLevel: 'silver',   verified: true,  categoryIndex: 1 },
-  { name: 'Lahiru Mendis',    email: 'lahiru@test.lk',    lat: 6.9370, lng: 79.8750, rating: 2.5, totalJobs: 10,  completionRate: 0.70, badgeLevel: 'bronze',   verified: true,  categoryIndex: 1 },
-  { name: 'Tharindu Dias',    email: 'tharindu@test.lk',  lat: 6.9450, lng: 79.8900, rating: 0,   totalJobs: 1,   completionRate: 1.0,  badgeLevel: 'trainee',  verified: false, categoryIndex: 1 },
+  { name: 'Ashan Wijesinghe', email: 'ashan@test.lk',     lat: 6.9220, lng: 79.8550, rating: 4.9, totalJobs: 150, completionRate: 0.97, badgeLevel: 'PLATINUM', verified: true,  categoryIndex: 1 },
+  { name: 'Dilshan Kumara',   email: 'dilshan@test.lk',   lat: 6.9280, lng: 79.8630, rating: 4.5, totalJobs: 55,  completionRate: 0.90, badgeLevel: 'GOLD',     verified: true,  categoryIndex: 1 },
+  { name: 'Pradeep Ranatunga',email: 'pradeep@test.lk',   lat: 6.9150, lng: 79.8480, rating: 3.8, totalJobs: 25,  completionRate: 0.84, badgeLevel: 'SILVER',   verified: true,  categoryIndex: 1 },
+  { name: 'Lahiru Mendis',    email: 'lahiru@test.lk',    lat: 6.9370, lng: 79.8750, rating: 2.5, totalJobs: 10,  completionRate: 0.70, badgeLevel: 'BRONZE',   verified: true,  categoryIndex: 1 },
+  { name: 'Tharindu Dias',    email: 'tharindu@test.lk',  lat: 6.9450, lng: 79.8900, rating: 0,   totalJobs: 1,   completionRate: 1.0,  badgeLevel: 'TRAINEE',  verified: false, categoryIndex: 1 },
 
   // Cleaning workers (category 2)
-  { name: 'Malini Herath',    email: 'malini@test.lk',    lat: 6.9250, lng: 79.8600, rating: 4.7, totalJobs: 110, completionRate: 0.93, badgeLevel: 'platinum', verified: true,  categoryIndex: 2 },
-  { name: 'Sanduni Gamage',   email: 'sanduni@test.lk',   lat: 6.9200, lng: 79.8520, rating: 4.3, totalJobs: 52,  completionRate: 0.89, badgeLevel: 'gold',     verified: true,  categoryIndex: 2 },
-  { name: 'Kumari Rajapaksa', email: 'kumari@test.lk',    lat: 6.9330, lng: 79.8680, rating: 3.6, totalJobs: 22,  completionRate: 0.82, badgeLevel: 'silver',   verified: true,  categoryIndex: 2 },
-  { name: 'Nimali Weerasinghe',email:'nimali@test.lk',    lat: 6.9120, lng: 79.8450, rating: 2.8, totalJobs: 6,   completionRate: 0.67, badgeLevel: 'bronze',   verified: false, categoryIndex: 2 },
-  { name: 'Iresha Samaraweera',email:'iresha@test.lk',    lat: 6.9500, lng: 79.8950, rating: 0,   totalJobs: 0,   completionRate: 0,    badgeLevel: 'trainee',  verified: false, categoryIndex: 2 },
+  { name: 'Malini Herath',    email: 'malini@test.lk',    lat: 6.9250, lng: 79.8600, rating: 4.7, totalJobs: 110, completionRate: 0.93, badgeLevel: 'PLATINUM', verified: true,  categoryIndex: 2 },
+  { name: 'Sanduni Gamage',   email: 'sanduni@test.lk',   lat: 6.9200, lng: 79.8520, rating: 4.3, totalJobs: 52,  completionRate: 0.89, badgeLevel: 'GOLD',     verified: true,  categoryIndex: 2 },
+  { name: 'Kumari Rajapaksa', email: 'kumari@test.lk',    lat: 6.9330, lng: 79.8680, rating: 3.6, totalJobs: 22,  completionRate: 0.82, badgeLevel: 'SILVER',   verified: true,  categoryIndex: 2 },
+  { name: 'Nimali Weerasinghe',email:'nimali@test.lk',    lat: 6.9120, lng: 79.8450, rating: 2.8, totalJobs: 6,   completionRate: 0.67, badgeLevel: 'BRONZE',   verified: false, categoryIndex: 2 },
+  { name: 'Iresha Samaraweera',email:'iresha@test.lk',    lat: 6.9500, lng: 79.8950, rating: 0,   totalJobs: 0,   completionRate: 0,    badgeLevel: 'TRAINEE',  verified: false, categoryIndex: 2 },
 ];
 
 async function seed() {

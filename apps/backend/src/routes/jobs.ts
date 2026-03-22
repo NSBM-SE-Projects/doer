@@ -30,11 +30,11 @@ async function recalculateWorkerStats(workerId: string) {
   // Badge calculation
   const isVerified = worker.verificationStatus === 'VERIFIED';
   const { totalJobs, rating } = worker;
-  let badgeLevel = 'trainee';
-  if (isVerified && totalJobs >= 100) badgeLevel = 'platinum';
-  else if (isVerified && totalJobs >= 50 && rating >= 4.0) badgeLevel = 'gold';
-  else if (isVerified && totalJobs >= 20) badgeLevel = 'silver';
-  else if (isVerified || totalJobs >= 5) badgeLevel = 'bronze';
+  let badgeLevel: 'TRAINEE' | 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' = 'TRAINEE';
+  if (isVerified && totalJobs >= 100) badgeLevel = 'PLATINUM';
+  else if (isVerified && totalJobs >= 50 && rating >= 4.0) badgeLevel = 'GOLD';
+  else if (isVerified && totalJobs >= 20) badgeLevel = 'SILVER';
+  else if (isVerified || totalJobs >= 5) badgeLevel = 'BRONZE';
 
   await prisma.workerProfile.update({
     where: { id: workerId },
@@ -128,8 +128,20 @@ router.post(
     let matches: any[] = [];
     if (job.latitude != null && job.longitude != null) {
       try {
-        const result = await matchWorkersForJob(job.id);
-        matches = result.matches;
+        await matchWorkersForJob(job.id);
+        // Re-fetch with full worker details
+        matches = await prisma.jobMatch.findMany({
+          where: { jobId: job.id },
+          include: {
+            worker: {
+              include: {
+                user: { select: { id: true, name: true, avatarUrl: true, phone: true } },
+                categories: { include: { category: true } },
+              },
+            },
+          },
+          orderBy: { matchScore: 'desc' },
+        });
       } catch (_) {
         // Matching is best-effort — don't fail job creation
       }
@@ -216,7 +228,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const { categoryId } = req.query;
 
-    const where: any = { status: 'OPEN' };
+    const where: any = { status: { in: ['OPEN', 'APPLICATIONS_RECEIVED'] } };
     if (categoryId) where.categoryId = categoryId;
 
     const jobs = await prisma.job.findMany({
@@ -433,6 +445,21 @@ router.patch(
       await recalculateWorkerStats(cancelledWorkerId);
     }
 
+    // Notify the other party
+    if (isCustomer && job.worker) {
+      await createNotification(
+        job.worker.userId,
+        'Job Cancelled',
+        `The customer cancelled "${job.title}"`
+      );
+    } else if (isWorker) {
+      await createNotification(
+        job.customer.userId,
+        'Job Cancelled',
+        `The worker cancelled "${job.title}". You can accept another application.`
+      );
+    }
+
     res.json({ job: updated });
   })
 );
@@ -443,9 +470,10 @@ router.post(
   authenticate,
   authorize('CUSTOMER'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { rating, comment } = z.object({
+    const { rating, comment, photoUrls } = z.object({
       rating: z.number().int().min(1).max(5),
       comment: z.string().optional(),
+      photoUrls: z.array(z.string()).optional(),
     }).parse(req.body);
 
     const job = await prisma.job.findUnique({
@@ -454,7 +482,9 @@ router.post(
     });
     if (!job) throw AppError.notFound('Job not found');
     if (job.customer.userId !== req.user!.userId) throw AppError.forbidden('Not your job');
-    if (job.status !== 'COMPLETED') throw AppError.badRequest('Can only review completed jobs');
+    if (job.status !== 'COMPLETED' && job.status !== 'REVIEWING') {
+      throw AppError.badRequest('Can only review completed or reviewing jobs');
+    }
     if (job.review) throw AppError.conflict('Review already exists');
     if (!job.workerId) throw AppError.badRequest('No worker assigned');
 
@@ -462,6 +492,7 @@ router.post(
       data: {
         rating,
         comment,
+        photoUrls: photoUrls || [],
         jobId: job.id,
         customerId: job.customerId,
         workerId: job.workerId,
@@ -479,10 +510,13 @@ router.post(
     });
     await recalculateWorkerStats(job.workerId);
 
-    // Move job to REVIEWING status
+    // Check if payment is also done — if so, auto-close the job
+    const payment = await prisma.payment.findUnique({ where: { jobId: job.id } });
+    const newStatus = payment?.status === 'RELEASED' ? 'CLOSED' : 'REVIEWING';
+
     await prisma.job.update({
       where: { id: req.params.id as string },
-      data: { status: 'REVIEWING' },
+      data: { status: newStatus },
     });
 
     res.status(201).json({ review });

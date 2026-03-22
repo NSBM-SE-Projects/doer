@@ -39,9 +39,27 @@ enum ApplicationStatus {
 }
 
 enum VerificationStatus {
+  NOT_SUBMITTED
   PENDING
   VERIFIED
   REJECTED
+}
+
+enum BadgeLevel {
+  TRAINEE
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+}
+
+enum PaymentStatus {
+  PENDING
+  HELD
+  RELEASED
+  DISPUTED
+  REFUNDED
+  COMPLETED
 }
 
 enum MatchStatus {
@@ -91,19 +109,37 @@ model WorkerProfile {
   latitude           Float?
   longitude          Float?
   nicNumber          String?
-  verificationStatus VerificationStatus @default(PENDING)
+  nicFrontUrl            String?
+  nicBackUrl             String?
+  nicVerified            Boolean            @default(false)
+  qualificationsVerified Boolean            @default(false)
+  backgroundCheckUrl     String?
+  backgroundCheckVerified Boolean           @default(false)
+  badgeLevel             BadgeLevel         @default(TRAINEE)
+  rejectionReason        String?
+  verificationStatus     VerificationStatus @default(NOT_SUBMITTED)
   isAvailable        Boolean            @default(true)
   rating             Float              @default(0)
   totalJobs          Int                @default(0)
   completionRate     Float              @default(0)
-  badgeLevel         String             @default("trainee")
 
   user               User               @relation(fields: [userId], references: [id])
   categories         WorkerCategory[]
   jobs               Job[]
   reviews            Review[]
   applications       JobApplication[]
+  qualificationDocs  QualificationDoc[]
+  portfolio          PortfolioItem[]
   jobMatches         JobMatch[]
+}
+
+model QualificationDoc {
+  id       String        @id @default(cuid())
+  title    String
+  url      String
+  workerId String
+
+  worker   WorkerProfile @relation(fields: [workerId], references: [id])
 }
 
 model ServiceCategory {
@@ -113,6 +149,7 @@ model ServiceCategory {
   iconUrl     String?
 
   workers     WorkerCategory[]
+  portfolioItems PortfolioItem[]
   jobs        Job[]
 }
 
@@ -140,6 +177,7 @@ model Job {
   address      String?
   scheduledAt  DateTime?
   scheduledEnd DateTime?
+  imageUrls    String[]
   completedAt  DateTime?
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
@@ -180,6 +218,7 @@ model Review {
   id         String          @id @default(cuid())
   rating     Int
   comment    String?
+  photoUrls  String[]
   createdAt  DateTime        @default(now())
 
   jobId      String          @unique
@@ -189,6 +228,19 @@ model Review {
   job        Job             @relation(fields: [jobId], references: [id])
   customer   CustomerProfile @relation(fields: [customerId], references: [id])
   worker     WorkerProfile   @relation(fields: [workerId], references: [id])
+}
+
+model PortfolioItem {
+  id          String           @id @default(cuid())
+  imageUrl    String
+  caption     String?
+  createdAt   DateTime         @default(now())
+
+  workerId    String
+  categoryId  String?
+
+  worker      WorkerProfile    @relation(fields: [workerId], references: [id])
+  category    ServiceCategory? @relation(fields: [categoryId], references: [id])
 }
 
 model Message {
@@ -204,14 +256,37 @@ model Message {
 }
 
 model Payment {
-  id            String   @id @default(cuid())
+  id            String        @id @default(cuid())
   amount        Float
-  status        String   @default("PENDING")
+  status        PaymentStatus @default(PENDING)
   payhereRef    String?
-  createdAt     DateTime @default(now())
+  heldAt        DateTime?
+  releasedAt    DateTime?
+  disputedAt    DateTime?
+  refundedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt @default(now())
 
-  jobId         String   @unique
-  job           Job      @relation(fields: [jobId], references: [id])
+  jobId         String        @unique
+  job           Job           @relation(fields: [jobId], references: [id])
+  dispute       Dispute?
+}
+
+model Dispute {
+  id               String   @id @default(cuid())
+  reason           String
+  description      String
+  customerEvidence String[]
+  workerResponse   String?
+  workerEvidence   String[]
+  resolution       String?
+  resolvedBy       String?
+  resolvedAt       DateTime?
+  createdAt        DateTime @default(now())
+
+  paymentId        String   @unique
+  payment          Payment  @relation(fields: [paymentId], references: [id])
+  raisedBy         String
 }
 
 model JobMatch {

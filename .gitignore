@@ -38,3 +38,4 @@ apps/mobile-worker/build/
 *.freezed.dart
 
 TODO.md
+DIAGRAMS.md
