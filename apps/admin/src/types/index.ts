@@ -21,6 +21,15 @@ export interface CustomerProfile {
   longitude: number | null;
 }
 
+export type BadgeLevel = 'TRAINEE' | 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';
+
+export interface QualificationDoc {
+  id: string;
+  title: string;
+  url: string;
+  workerId: string;
+}
+
 export interface WorkerProfile {
   id: string;
   userId: string;
@@ -28,11 +37,17 @@ export interface WorkerProfile {
   latitude: number | null;
   longitude: number | null;
   nicNumber: string | null;
-  verificationStatus: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  nicFrontUrl: string | null;
+  nicBackUrl: string | null;
+  backgroundCheckUrl: string | null;
+  badgeLevel: BadgeLevel;
+  rejectionReason: string | null;
+  verificationStatus: 'NOT_SUBMITTED' | 'PENDING' | 'VERIFIED' | 'REJECTED';
   isAvailable: boolean;
   rating: number;
   totalJobs: number;
   categories?: { category: ServiceCategory }[];
+  qualificationDocs?: QualificationDoc[];
 }
 
 export interface ServiceCategory {

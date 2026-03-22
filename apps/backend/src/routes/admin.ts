@@ -248,6 +248,7 @@ router.get(
           select: { id: true, name: true, email: true, phone: true, avatarUrl: true, createdAt: true },
         },
         categories: { include: { category: true } },
+        qualificationDocs: true,
       },
       orderBy: { user: { createdAt: 'asc' } },
     });
