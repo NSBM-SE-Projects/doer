@@ -9,6 +9,9 @@ import 'core/services/api_service.dart';
 import 'core/services/socket_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'core/services/notification_service.dart';
+import 'features/video/incoming_call_screen.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +29,20 @@ void main() async {
   await AuthService().init();
   await SocketService().connect();
   await NotificationService().init();
+
+  // Listen for incoming video calls globally
+  SocketService().onIncomingCall = (data) {
+    final ctx = navigatorKey.currentContext;
+    if (ctx != null) {
+      Navigator.of(ctx).push(MaterialPageRoute(
+        builder: (_) => IncomingCallScreen(
+          callerName: data['callerName'] ?? 'Unknown',
+          callerId: data['callerId'] ?? '',
+          channelName: data['channelName'] ?? '',
+        ),
+      ));
+    }
+  };
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -46,6 +63,7 @@ class DoerWorkerApp extends StatelessWidget {
       title: 'Doer Worker',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      navigatorKey: navigatorKey,
       initialRoute: AppRoutes.splash,
       onGenerateRoute: generateRoute,
     );

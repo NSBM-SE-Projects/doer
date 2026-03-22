@@ -17,6 +17,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   String _userName = '';
+  String _userLocation = 'Sri Lanka';
   List<dynamic> _workers = [];
   List<dynamic> _myJobs = [];
   int _activeJobCount = 0;
@@ -41,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       setState(() {
         _userName = user['name'] ?? AuthService().currentUser?.displayName ?? '';
+        _userLocation = user['customerProfile']?['address'] ?? 'Sri Lanka';
         _workers = workers.take(3).toList();
         _myJobs = jobs;
         _activeJobCount = jobs.where((j) =>
@@ -48,11 +50,16 @@ class _HomeScreenState extends State<HomeScreen> {
         ).length;
         _isLoading = false;
       });
-    } catch (_) {
+    } catch (e) {
       setState(() {
         _userName = AuthService().currentUser?.displayName ?? '';
         _isLoading = false;
       });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ApiService.errorMessage(e))),
+        );
+      }
     }
   }
 
@@ -129,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Row(mainAxisSize: MainAxisSize.min, children: [
                               const Icon(Icons.location_on_outlined, size: 14, color: AppColors.primary),
                               const SizedBox(width: 4),
-                              Text('Colombo', style: AppTypography.labelSmall.copyWith(
+                              Text(_userLocation.length > 15 ? '${_userLocation.substring(0, 15)}...' : _userLocation, style: AppTypography.labelSmall.copyWith(
                                 color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
                             ]),
                           ),

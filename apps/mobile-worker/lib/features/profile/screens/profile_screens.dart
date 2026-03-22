@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -276,18 +277,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       icon: Icons.star_outline_rounded,
                       label: 'Reviews & Ratings',
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Coming soon')),
-                        );
+                        Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => _WorkerReviewsScreen(rating: _rating, totalJobs: _totalJobs),
+                        ));
                       },
                     ),
                     _ProfileMenuItem(
                       icon: Icons.help_outline_rounded,
                       label: 'Help & Support',
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Coming soon')),
-                        );
+                        Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => const _WorkerHelpScreen(),
+                        ));
                       },
                     ),
                     _ProfileMenuItem(
@@ -553,8 +554,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 // ──────────────────────────────────────────────────────────────
 // SETTINGS SCREEN
 // ──────────────────────────────────────────────────────────────
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _jobAlerts = true;
+  bool _messageAlerts = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrefs();
+  }
+
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _jobAlerts = prefs.getBool('w_job_alerts') ?? true;
+      _messageAlerts = prefs.getBool('w_message_alerts') ?? true;
+    });
+  }
 
   void _showChangePassword(BuildContext context) {
     final currentController = TextEditingController();
@@ -669,14 +691,22 @@ class SettingsScreen extends StatelessWidget {
               _SettingsToggleItem(
                 icon: Icons.notifications_outlined,
                 label: 'Job Alerts',
-                value: true,
-                onChanged: (_) {},
+                value: _jobAlerts,
+                onChanged: (v) async {
+                  setState(() => _jobAlerts = v);
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('w_job_alerts', v);
+                },
               ),
               _SettingsToggleItem(
                 icon: Icons.chat_bubble_outline_rounded,
                 label: 'New Messages',
-                value: true,
-                onChanged: (_) {},
+                value: _messageAlerts,
+                onChanged: (v) async {
+                  setState(() => _messageAlerts = v);
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('w_message_alerts', v);
+                },
               ),
             ],
           ),
@@ -692,8 +722,28 @@ class SettingsScreen extends StatelessWidget {
               _SettingsLinkItem(
                 icon: Icons.language_outlined,
                 label: 'Language',
-                trailing: 'Sinhala',
-                onTap: () {},
+                trailing: 'English',
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => SimpleDialog(
+                      title: const Text('Select Language'),
+                      children: ['English', 'Sinhala', 'Tamil'].map((lang) =>
+                        SimpleDialogOption(
+                          child: Text(lang),
+                          onPressed: () async {
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setString('w_language', lang);
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Language set to $lang')));
+                            }
+                          },
+                        ),
+                      ).toList(),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -705,12 +755,20 @@ class SettingsScreen extends StatelessWidget {
                 icon: Icons.info_outline_rounded,
                 label: 'App Version',
                 trailing: '1.0.0',
-                onTap: () {},
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Doer Worker v1.0.0')),
+                  );
+                },
               ),
               _SettingsLinkItem(
                 icon: Icons.description_outlined,
                 label: 'Terms of Service',
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => const _WorkerTermsScreen(),
+                  ));
+                },
               ),
             ],
           ),
@@ -810,6 +868,115 @@ class _SettingsLinkItem extends StatelessWidget {
             const Icon(Icons.chevron_right_rounded,
                 size: 18, color: AppColors.textTertiary),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Worker Reviews Screen ──
+class _WorkerReviewsScreen extends StatelessWidget {
+  final double rating;
+  final int totalJobs;
+  const _WorkerReviewsScreen({required this.rating, required this.totalJobs});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: const Text('Reviews & Ratings')),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                children: [
+                  Text(rating.toStringAsFixed(1), style: AppTypography.displayLarge.copyWith(color: AppColors.primary)),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(5, (i) => Icon(
+                      i < rating.round() ? Icons.star_rounded : Icons.star_outline_rounded,
+                      color: AppColors.badgeGold, size: 24,
+                    )),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Based on $totalJobs jobs', style: AppTypography.bodySmall),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Expanded(
+              child: Center(
+                child: Text('Individual reviews will appear here as you complete more jobs.', textAlign: TextAlign.center),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Worker Help Screen ──
+class _WorkerHelpScreen extends StatelessWidget {
+  const _WorkerHelpScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: const Text('Help & Support')),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          _HelpItem(q: 'How do I get verified?', a: 'Go to Profile > Verification Status and upload your NIC and any qualifications.'),
+          _HelpItem(q: 'How do I receive payments?', a: 'Payments are processed through PayHere after job completion.'),
+          _HelpItem(q: 'How do I apply for jobs?', a: 'Browse available jobs from the home screen and tap Apply.'),
+          _HelpItem(q: 'How do I contact support?', a: 'Email us at support@doer.lk for any issues.'),
+          _HelpItem(q: 'What are badge levels?', a: 'Badges (Trainee → Platinum) are earned through verification, job completion, and ratings.'),
+        ],
+      ),
+    );
+  }
+}
+
+class _HelpItem extends StatelessWidget {
+  final String q;
+  final String a;
+  const _HelpItem({required this.q, required this.a});
+
+  @override
+  Widget build(BuildContext context) {
+    return ExpansionTile(
+      title: Text(q, style: AppTypography.headlineSmall),
+      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      children: [Text(a, style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary))],
+    );
+  }
+}
+
+// ── Worker Terms Screen ──
+class _WorkerTermsScreen extends StatelessWidget {
+  const _WorkerTermsScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: const Text('Terms of Service')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Text(
+          'Terms of Service\n\nLast updated: March 2026\n\nBy using Doer as a worker, you agree to these terms.\n\n1. Service Description\nDoer connects you with customers seeking home services in Sri Lanka.\n\n2. Worker Obligations\nYou must provide accurate identity information, maintain professional conduct, and complete accepted jobs.\n\n3. Verification\nIdentity verification (NIC) is required. Doer reserves the right to reject or revoke verification.\n\n4. Payments\nPayments are processed through PayHere. You keep 100% of job earnings.\n\n5. Cancellation\nRepeated cancellations may affect your rating and verification status.\n\n6. Liability\nDoer is a platform connecting workers with customers. You are responsible for the quality of your work.\n\n7. Contact\nFor questions, email legal@doer.lk',
+          style: AppTypography.bodyMedium.copyWith(height: 1.8, color: AppColors.textSecondary),
         ),
       ),
     );

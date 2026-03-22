@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'package:image_picker/image_picker.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -31,6 +33,8 @@ class _RateReviewScreenState extends State<RateReviewScreen> {
   int _rating = 0;
   bool _submitting = false;
   final _reviewController = TextEditingController();
+  final List<File> _photos = [];
+  final _picker = ImagePicker();
 
   @override
   void dispose() {
@@ -147,8 +151,50 @@ class _RateReviewScreenState extends State<RateReviewScreen> {
                   style: AppTypography.headlineMedium),
             ),
             const SizedBox(height: 10),
+            if (_photos.isNotEmpty) ...[
+              SizedBox(
+                height: 80,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _photos.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) => ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.file(_photos[i], width: 80, height: 80, fit: BoxFit.cover),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
             GestureDetector(
-              onTap: () {},
+              onTap: () async {
+                final source = await showModalBottomSheet<ImageSource>(
+                  context: context,
+                  builder: (ctx) => SafeArea(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.camera_alt_rounded),
+                          title: const Text('Camera'),
+                          onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.photo_library_rounded),
+                          title: const Text('Gallery'),
+                          onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+                if (source != null) {
+                  final picked = await _picker.pickImage(source: source, imageQuality: 80);
+                  if (picked != null) {
+                    setState(() => _photos.add(File(picked.path)));
+                  }
+                }
+              },
               child: Container(
                 width: double.infinity,
                 height: 100,
@@ -163,7 +209,7 @@ class _RateReviewScreenState extends State<RateReviewScreen> {
                     const Icon(Icons.add_photo_alternate_outlined,
                         color: AppColors.textTertiary, size: 28),
                     const SizedBox(height: 6),
-                    Text('Upload work photos',
+                    Text(_photos.isEmpty ? 'Upload work photos' : 'Add more photos',
                         style: AppTypography.bodySmall),
                   ],
                 ),

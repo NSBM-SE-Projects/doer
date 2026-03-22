@@ -121,7 +121,11 @@ class AuthService {
   }
 
   Future<void> resetPassword({required String email}) async {
-    throw 'Password reset is not available yet. Please contact support.';
+    try {
+      await ApiService().resetPassword(email);
+    } catch (e) {
+      throw ApiService.errorMessage(e);
+    }
   }
 
   Future<void> _connectServices() async {

@@ -74,7 +74,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                     jobTitle: c['jobTitle'] ?? '',
                     unread: false,
                     onTap: () => Navigator.push(context, MaterialPageRoute(
-                      builder: (_) => ChatScreen(jobId: c['jobId'], workerName: other?['name'] ?? 'Worker', jobTitle: c['jobTitle']),
+                      builder: (_) => ChatScreen(jobId: c['jobId'], workerName: other?['name'] ?? 'Worker', jobTitle: c['jobTitle'], otherUserId: other?['id']),
                     )),
                   );
                 },
@@ -98,7 +98,8 @@ class ChatScreen extends StatefulWidget {
   final String? jobId;
   final String? workerName;
   final String? jobTitle;
-  const ChatScreen({super.key, this.jobId, this.workerName, this.jobTitle});
+  final String? otherUserId;
+  const ChatScreen({super.key, this.jobId, this.workerName, this.jobTitle, this.otherUserId});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -243,6 +244,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     builder: (_) => VideoCallScreen(
                       channelName: widget.jobId!,
                       remoteName: widget.workerName ?? 'Worker',
+                      targetUserId: widget.otherUserId,
                     ),
                   ));
                 }
@@ -302,7 +304,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   // Attachment button
                   GestureDetector(
-                    onTap: () {},
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Image sharing coming soon')),
+                      );
+                    },
                     child: Container(
                       width: 36,
                       height: 36,

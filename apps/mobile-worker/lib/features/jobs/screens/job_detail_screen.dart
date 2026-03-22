@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/services/api_service.dart';
@@ -21,6 +24,28 @@ class JobDetailScreen extends StatefulWidget {
 class _JobDetailScreenState extends State<JobDetailScreen> {
   bool _applied = false;
   bool _applying = false;
+  late String _currentStatus;
+  bool _actionLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentStatus = widget.job.status?.toUpperCase() ?? 'OPEN';
+    _refreshStatus();
+  }
+
+  /// Fetch the latest job status from the backend
+  Future<void> _refreshStatus() async {
+    try {
+      final job = await ApiService().getJob(widget.job.id);
+      if (mounted) {
+        final status = (job['status'] as String?)?.toUpperCase() ?? _currentStatus;
+        setState(() => _currentStatus = status);
+      }
+    } catch (_) {
+      // Keep using the passed-in status if fetch fails
+    }
+  }
 
   Future<void> _applyToJob() async {
     setState(() => _applying = true);
@@ -57,6 +82,204 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     }
   }
 
+  Future<void> _startJob() async {
+    setState(() => _actionLoading = true);
+    try {
+      await ApiService().startJob(widget.job.id);
+      if (mounted) {
+        setState(() => _actionLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Job marked as In Progress'), backgroundColor: AppColors.success),
+        );
+        await _refreshStatus();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _actionLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.errorMessage(e))));
+      }
+    }
+  }
+
+  Future<void> _completeJob() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Complete Job'),
+        content: const Text('Mark this job as completed? The customer will be notified to confirm and leave a review.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Not Yet')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, Complete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _actionLoading = true);
+    try {
+      await ApiService().completeJob(widget.job.id);
+      if (mounted) {
+        setState(() => _actionLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Job completed! Waiting for customer confirmation.'), backgroundColor: AppColors.success),
+        );
+        await _refreshStatus();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _actionLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.errorMessage(e))));
+      }
+    }
+  }
+
+  Future<void> _cancelJob() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Job'),
+        content: const Text('Are you sure you want to cancel this job? This may affect your rating.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep Job')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Cancel Job', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _actionLoading = true);
+    try {
+      await ApiService().cancelJob(widget.job.id);
+      if (mounted) {
+        setState(() { _currentStatus = 'CANCELLED'; _actionLoading = false; });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Job cancelled')),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _actionLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.errorMessage(e))));
+      }
+    }
+  }
+
+  Widget _buildBottomAction() {
+    // Completed state
+    if (_currentStatus == 'COMPLETED') {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 20),
+          const SizedBox(width: 8),
+          Text('Job Completed', style: AppTypography.headlineSmall.copyWith(color: AppColors.success)),
+        ],
+      );
+    }
+
+    // Cancelled state
+    if (_currentStatus == 'CANCELLED') {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.cancel_rounded, color: AppColors.error, size: 20),
+          const SizedBox(width: 8),
+          Text('Job Cancelled', style: AppTypography.headlineSmall.copyWith(color: AppColors.error)),
+        ],
+      );
+    }
+
+    // In Progress — show Complete Job + Cancel
+    if (_currentStatus == 'IN_PROGRESS') {
+      return Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 52,
+              child: OutlinedButton.icon(
+                onPressed: _actionLoading ? null : _cancelJob,
+                icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.error),
+                label: Text('Cancel', style: AppTypography.labelLarge.copyWith(color: AppColors.error)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.error, width: 0.5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: DoerButton(
+              label: 'Job Complete',
+              isLoading: _actionLoading,
+              onPressed: _completeJob,
+              icon: Icons.check_circle_outline_rounded,
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Assigned — show In Progress + Cancel
+    if (_currentStatus == 'ASSIGNED') {
+      return Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 52,
+              child: OutlinedButton.icon(
+                onPressed: _actionLoading ? null : _cancelJob,
+                icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.error),
+                label: Text('Cancel', style: AppTypography.labelLarge.copyWith(color: AppColors.error)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.error, width: 0.5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: DoerButton(
+              label: 'Start Job',
+              isLoading: _actionLoading,
+              onPressed: _startJob,
+              icon: Icons.play_arrow_rounded,
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Default: Open/Applications Received — show Apply
+    if (_applied) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 20),
+          const SizedBox(width: 8),
+          Text('Application Submitted', style: AppTypography.headlineSmall.copyWith(color: AppColors.success)),
+        ],
+      );
+    }
+
+    return DoerButton(
+      label: 'Apply for this Job',
+      isLoading: _applying,
+      onPressed: _applyToJob,
+      icon: Icons.handyman_rounded,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final job = widget.job;
@@ -79,7 +302,14 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               IconButton(
                 icon: const Icon(Icons.share_outlined,
                     color: AppColors.textSecondary),
-                onPressed: () {},
+                onPressed: () {
+                  final title = widget.job.title;
+                  final id = widget.job.id;
+                  Clipboard.setData(ClipboardData(text: '$title (Job ID: $id)'));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Job details copied to clipboard')),
+                  );
+                },
               ),
             ],
           ),
@@ -165,7 +395,57 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                     ],
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
+
+                  // Status banner
+                  if (_currentStatus == 'ASSIGNED' || _currentStatus == 'IN_PROGRESS' || _currentStatus == 'COMPLETED')
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: _currentStatus == 'COMPLETED'
+                            ? AppColors.success.withValues(alpha: 0.1)
+                            : _currentStatus == 'IN_PROGRESS'
+                                ? AppColors.warning.withValues(alpha: 0.1)
+                                : AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _currentStatus == 'COMPLETED'
+                                ? Icons.check_circle_rounded
+                                : _currentStatus == 'IN_PROGRESS'
+                                    ? Icons.engineering_rounded
+                                    : Icons.assignment_turned_in_rounded,
+                            size: 18,
+                            color: _currentStatus == 'COMPLETED'
+                                ? AppColors.success
+                                : _currentStatus == 'IN_PROGRESS'
+                                    ? AppColors.warning
+                                    : AppColors.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _currentStatus == 'COMPLETED'
+                                ? 'Completed — Waiting for customer review'
+                                : _currentStatus == 'IN_PROGRESS'
+                                    ? 'Work In Progress'
+                                    : 'Assigned to you',
+                            style: AppTypography.labelMedium.copyWith(
+                              color: _currentStatus == 'COMPLETED'
+                                  ? AppColors.success
+                                  : _currentStatus == 'IN_PROGRESS'
+                                      ? AppColors.warning
+                                      : AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
                   const Divider(),
                   const SizedBox(height: 20),
                 ],
@@ -318,7 +598,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
             ),
           ),
 
-          // ── Map placeholder ──
+          // ── Map ──
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -327,42 +607,65 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                 children: [
                   Text('Location', style: AppTypography.headlineMedium),
                   const SizedBox(height: 12),
-                  Container(
-                    height: 160,
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Stack(
-                      children: [
-                        Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.map_outlined,
-                                  size: 36, color: AppColors.textTertiary),
-                              const SizedBox(height: 8),
-                              Text(job.address,
-                                  style: AppTypography.bodySmall,
-                                  textAlign: TextAlign.center),
-                            ],
-                          ),
-                        ),
-                        Positioned(
-                          bottom: 10,
-                          right: 10,
-                          child: GestureDetector(
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Location: ${job.address}'),
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  margin: const EdgeInsets.all(16),
+                  GestureDetector(
+                    onTap: () async {
+                      final lat = widget.job.lat;
+                      final lng = widget.job.lng;
+                      Uri uri;
+                      if (lat != null && lng != null) {
+                        uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+                      } else {
+                        uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(job.address)}');
+                      }
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      }
+                    },
+                    child: Container(
+                      height: 180,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Stack(
+                        children: [
+                          if (widget.job.lat != null && widget.job.lng != null)
+                            GoogleMap(
+                              initialCameraPosition: CameraPosition(
+                                target: LatLng(widget.job.lat!, widget.job.lng!),
+                                zoom: 15,
+                              ),
+                              markers: {
+                                Marker(
+                                  markerId: const MarkerId('job'),
+                                  position: LatLng(widget.job.lat!, widget.job.lng!),
                                 ),
-                              );
-                            },
+                              },
+                              zoomControlsEnabled: false,
+                              scrollGesturesEnabled: false,
+                              rotateGesturesEnabled: false,
+                              tiltGesturesEnabled: false,
+                              myLocationButtonEnabled: false,
+                              liteModeEnabled: true,
+                            )
+                          else
+                            Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.map_outlined,
+                                      size: 36, color: AppColors.textTertiary),
+                                  const SizedBox(height: 8),
+                                  Text(job.address,
+                                      style: AppTypography.bodySmall,
+                                      textAlign: TextAlign.center),
+                                ],
+                              ),
+                            ),
+                          Positioned(
+                            bottom: 10,
+                            right: 10,
                             child: Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 6),
@@ -370,20 +673,31 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                                 color: AppColors.primary,
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: Text(
-                                'Open Maps',
-                                style: AppTypography.labelSmall.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.directions_rounded, size: 14, color: Colors.white),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Open in Google Maps',
+                                    style: AppTypography.labelSmall.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 100), // space for bottom bar
+                  if (job.address.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(job.address, style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary)),
+                  ],
+                  const SizedBox(height: 100),
                 ],
               ),
             ),
@@ -391,7 +705,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         ],
       ),
 
-      // ── Sticky apply bar ──
+      // ── Sticky action bar ──
       bottomNavigationBar: Container(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         decoration: BoxDecoration(
@@ -406,27 +720,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
             ),
           ],
         ),
-        child: _applied
-            ? Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.check_circle_rounded,
-                      color: AppColors.success, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Application Submitted',
-                    style: AppTypography.headlineSmall.copyWith(
-                      color: AppColors.success,
-                    ),
-                  ),
-                ],
-              )
-            : DoerButton(
-                label: 'Apply for this Job',
-                isLoading: _applying,
-                onPressed: _applyToJob,
-                icon: Icons.handyman_rounded,
-              ),
+        child: _buildBottomAction(),
       ),
     );
   }
@@ -488,6 +782,8 @@ class JobDetailData {
   final String address;
   final String? estimatedDuration;
   final String? status;
+  final double? lat;
+  final double? lng;
 
   const JobDetailData({
     required this.id,
@@ -505,6 +801,8 @@ class JobDetailData {
     required this.address,
     this.estimatedDuration,
     this.status,
+    this.lat,
+    this.lng,
   });
 }
 

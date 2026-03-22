@@ -58,6 +58,25 @@ export const initSocket = (httpServer: HttpServer) => {
       });
     });
 
+    // Video call — ring the other user
+    socket.on('call_user', (data: { targetUserId: string; channelName: string; callerName: string }) => {
+      io!.to(`user:${data.targetUserId}`).emit('incoming_call', {
+        callerId: userId,
+        callerName: data.callerName,
+        channelName: data.channelName,
+      });
+    });
+
+    // Video call — caller cancelled or call ended
+    socket.on('call_end', (data: { targetUserId: string }) => {
+      io!.to(`user:${data.targetUserId}`).emit('call_ended', { callerId: userId });
+    });
+
+    // Video call — callee declined
+    socket.on('call_decline', (data: { targetUserId: string }) => {
+      io!.to(`user:${data.targetUserId}`).emit('call_declined', { userId });
+    });
+
     socket.on('disconnect', () => {
       console.log(`User ${userId} disconnected`);
     });

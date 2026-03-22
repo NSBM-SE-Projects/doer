@@ -138,6 +138,16 @@ class ApiService {
     return resp.data;
   }
 
+  Future<Map<String, dynamic>> resetPassword(String email) async {
+    final resp = await _dio.post('/auth/reset-password', data: {'email': email});
+    return resp.data;
+  }
+
+  Future<void> deleteAccount() async {
+    await _dio.delete('/auth/account');
+    await _clearJwt();
+  }
+
   /// Logout — clear JWT
   Future<void> logout() async {
     await _clearJwt();
@@ -327,6 +337,15 @@ class ApiService {
 
   Future<Map<String, dynamic>> reverseGeocode(double lat, double lng) async {
     final resp = await _dio.get('/maps/reverse-geocode', queryParameters: {'lat': lat, 'lng': lng});
+    return resp.data;
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // AGORA
+  // ════════════════════════════════════════════════════════════
+
+  Future<Map<String, dynamic>> getAgoraToken(String channelName) async {
+    final resp = await _dio.get('/agora/token', queryParameters: {'channelName': channelName});
     return resp.data;
   }
 
