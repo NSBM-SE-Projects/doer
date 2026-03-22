@@ -13,6 +13,7 @@ import 'features/video/incoming_call_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 

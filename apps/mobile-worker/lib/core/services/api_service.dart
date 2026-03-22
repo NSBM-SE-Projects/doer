@@ -83,7 +83,7 @@ class ApiService {
       'email': email,
       'password': password,
       'name': name,
-      if (phone != null) 'phone': phone,
+      'phone': ?phone,
       'role': 'WORKER',
     });
     final jwt = resp.data['token'] as String;
@@ -163,9 +163,9 @@ class ApiService {
     String? avatarUrl,
   }) async {
     final resp = await _dio.put('/users/me', data: {
-      if (name != null) 'name': name,
-      if (phone != null) 'phone': phone,
-      if (avatarUrl != null) 'avatarUrl': avatarUrl,
+      'name': ?name,
+      'phone': ?phone,
+      'avatarUrl': ?avatarUrl,
     });
     return resp.data;
   }
@@ -179,13 +179,67 @@ class ApiService {
     List<String>? categoryIds,
   }) async {
     final resp = await _dio.put('/users/me/worker', data: {
-      if (bio != null) 'bio': bio,
-      if (isAvailable != null) 'isAvailable': isAvailable,
-      if (latitude != null) 'latitude': latitude,
-      if (longitude != null) 'longitude': longitude,
-      if (nicNumber != null) 'nicNumber': nicNumber,
-      if (categoryIds != null) 'categoryIds': categoryIds,
+      'bio': ?bio,
+      'isAvailable': ?isAvailable,
+      'latitude': ?latitude,
+      'longitude': ?longitude,
+      'nicNumber': ?nicNumber,
+      'categoryIds': ?categoryIds,
     });
+    return resp.data;
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // VERIFICATION / DOCUMENTS
+  // ════════════════════════════════════════════════════════════
+
+  /// Upload verification documents (NIC front/back, background check, qualifications)
+  Future<Map<String, dynamic>> uploadVerificationDocuments({
+    String? nicFrontPath,
+    String? nicBackPath,
+    String? backgroundCheckPath,
+    List<String>? qualificationPaths,
+  }) async {
+    final formData = FormData();
+
+    if (nicFrontPath != null) {
+      formData.files.add(MapEntry(
+        'nicFront',
+        await MultipartFile.fromFile(nicFrontPath, filename: 'nic_front.jpg'),
+      ));
+    }
+    if (nicBackPath != null) {
+      formData.files.add(MapEntry(
+        'nicBack',
+        await MultipartFile.fromFile(nicBackPath, filename: 'nic_back.jpg'),
+      ));
+    }
+    if (backgroundCheckPath != null) {
+      formData.files.add(MapEntry(
+        'backgroundCheck',
+        await MultipartFile.fromFile(backgroundCheckPath, filename: 'background_check.jpg'),
+      ));
+    }
+    if (qualificationPaths != null) {
+      for (final path in qualificationPaths) {
+        formData.files.add(MapEntry(
+          'qualifications',
+          await MultipartFile.fromFile(path, filename: path.split('/').last),
+        ));
+      }
+    }
+
+    final resp = await _dio.post(
+      '/users/me/worker/documents',
+      data: formData,
+      options: Options(contentType: 'multipart/form-data'),
+    );
+    return resp.data;
+  }
+
+  /// Get current verification status, badge level, documents, and next badge info
+  Future<Map<String, dynamic>> getVerificationStatus() async {
+    final resp = await _dio.get('/users/me/worker/verification');
     return resp.data;
   }
 
@@ -204,14 +258,14 @@ class ApiService {
 
   Future<List<dynamic>> getAvailableJobs({String? categoryId}) async {
     final resp = await _dio.get('/jobs/available', queryParameters: {
-      if (categoryId != null) 'categoryId': categoryId,
+      'categoryId': ?categoryId,
     });
     return resp.data['jobs'] as List;
   }
 
   Future<Map<String, dynamic>> getMyJobs({String? status}) async {
     final resp = await _dio.get('/jobs/my', queryParameters: {
-      if (status != null) 'status': status,
+      'status': ?status,
     });
     return resp.data;
   }
@@ -298,8 +352,8 @@ class ApiService {
 
   Future<Map<String, dynamic>> applyToJob(String jobId, {String? message, double? price}) async {
     final resp = await _dio.post('/applications/$jobId', data: {
-      if (message != null) 'message': message,
-      if (price != null) 'price': price,
+      'message': ?message,
+      'price': ?price,
     });
     return resp.data;
   }

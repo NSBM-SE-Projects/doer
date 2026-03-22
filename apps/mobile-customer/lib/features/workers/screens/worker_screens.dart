@@ -804,7 +804,7 @@ class _BrowseWorkersScreenState extends State<BrowseWorkersScreen> {
                         : ListView.separated(
                             padding: const EdgeInsets.symmetric(horizontal: 20),
                             itemCount: _workers.length,
-                            separatorBuilder: (_, __) =>
+                            separatorBuilder: (_, _) =>
                                 const SizedBox(height: 12),
                             itemBuilder: (_, index) {
                               final w = _workers[index] as Map<String, dynamic>;

@@ -62,10 +62,10 @@ export const deleteUser = (id: string) =>
 export const getPendingWorkers = () =>
   request<any>('/admin/workers/pending');
 
-export const verifyWorker = (id: string, status: 'VERIFIED' | 'REJECTED') =>
+export const verifyWorker = (id: string, status: 'VERIFIED' | 'REJECTED', rejectionReason?: string) =>
   request<any>(`/users/${id}/verify`, {
     method: 'PATCH',
-    body: JSON.stringify({ verificationStatus: status }),
+    body: JSON.stringify({ status, rejectionReason }),
   });
 
 // Jobs

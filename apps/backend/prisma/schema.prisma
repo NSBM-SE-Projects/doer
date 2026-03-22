@@ -39,9 +39,18 @@ enum ApplicationStatus {
 }
 
 enum VerificationStatus {
+  NOT_SUBMITTED
   PENDING
   VERIFIED
   REJECTED
+}
+
+enum BadgeLevel {
+  TRAINEE
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
 }
 
 model User {
@@ -83,7 +92,12 @@ model WorkerProfile {
   latitude           Float?
   longitude          Float?
   nicNumber          String?
-  verificationStatus VerificationStatus @default(PENDING)
+  nicFrontUrl        String?
+  nicBackUrl         String?
+  backgroundCheckUrl String?
+  badgeLevel         BadgeLevel         @default(TRAINEE)
+  rejectionReason    String?
+  verificationStatus VerificationStatus @default(NOT_SUBMITTED)
   isAvailable        Boolean            @default(true)
   rating             Float              @default(0)
   totalJobs          Int                @default(0)
@@ -93,7 +107,17 @@ model WorkerProfile {
   jobs               Job[]
   reviews            Review[]
   applications       JobApplication[]
+  qualificationDocs  QualificationDoc[]
   portfolio          PortfolioItem[]
+}
+
+model QualificationDoc {
+  id       String        @id @default(cuid())
+  title    String
+  url      String
+  workerId String
+
+  worker   WorkerProfile @relation(fields: [workerId], references: [id])
 }
 
 model ServiceCategory {

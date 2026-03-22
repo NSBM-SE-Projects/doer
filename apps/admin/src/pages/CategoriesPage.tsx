@@ -10,8 +10,50 @@ import {
   Pencil,
   Trash2,
   X,
-  FolderOpen,
 } from 'lucide-react';
+
+const CATEGORY_ICONS: Record<string, { emoji: string; color: string }> = {
+  plumbing:  { emoji: '🔧', color: '#FF9800' },
+  electrical: { emoji: '⚡', color: '#4CAF50' },
+  cleaning:  { emoji: '🧹', color: '#2196F3' },
+  painting:  { emoji: '🎨', color: '#E53935' },
+  gardening: { emoji: '🌿', color: '#66BB6A' },
+  moving:    { emoji: '📦', color: '#9C27B0' },
+  carpentry: { emoji: '🪚', color: '#795548' },
+  appliance: { emoji: '🔌', color: '#00BCD4' },
+};
+
+const ICON_OPTIONS = [
+  { emoji: '🔧', label: 'Wrench' },
+  { emoji: '⚡', label: 'Lightning' },
+  { emoji: '🧹', label: 'Broom' },
+  { emoji: '🎨', label: 'Palette' },
+  { emoji: '🌿', label: 'Plant' },
+  { emoji: '📦', label: 'Package' },
+  { emoji: '🪚', label: 'Saw' },
+  { emoji: '🔌', label: 'Plug' },
+  { emoji: '🏠', label: 'House' },
+  { emoji: '🚿', label: 'Shower' },
+  { emoji: '🛠️', label: 'Tools' },
+  { emoji: '🧰', label: 'Toolbox' },
+  { emoji: '🪣', label: 'Bucket' },
+  { emoji: '🔩', label: 'Bolt' },
+  { emoji: '💡', label: 'Lightbulb' },
+  { emoji: '🪜', label: 'Ladder' },
+  { emoji: '🧱', label: 'Brick' },
+  { emoji: '🪟', label: 'Window' },
+  { emoji: '🚪', label: 'Door' },
+  { emoji: '🏗️', label: 'Construction' },
+];
+
+function getCategoryIcon(name: string): { emoji: string; color: string } {
+  const key = name.toLowerCase().trim();
+  if (CATEGORY_ICONS[key]) return CATEGORY_ICONS[key];
+  for (const [k, v] of Object.entries(CATEGORY_ICONS)) {
+    if (key.includes(k) || k.includes(key)) return v;
+  }
+  return { emoji: '🔧', color: '#D4A55A' };
+}
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<any[]>([]);
@@ -44,7 +86,7 @@ export default function CategoriesPage() {
     setFormData({
       name: cat.name,
       description: cat.description || '',
-      iconUrl: cat.iconUrl || '',
+      iconUrl: cat.iconUrl || getCategoryIcon(cat.name).emoji,
     });
     setShowForm(true);
   };
@@ -108,16 +150,15 @@ export default function CategoriesPage() {
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-primary-50 rounded-lg flex items-center justify-center">
-                  {cat.iconUrl ? (
-                    <img
-                      src={cat.iconUrl}
-                      alt=""
-                      className="w-6 h-6"
-                    />
-                  ) : (
-                    <FolderOpen size={18} className="text-primary-600" />
-                  )}
+                <div
+                  className="w-10 h-10 rounded-lg flex items-center justify-center"
+                  style={{ backgroundColor: getCategoryIcon(cat.name).color + '18' }}
+                >
+                  <span className="text-xl leading-none">
+                    {cat.iconUrl && ICON_OPTIONS.some(o => o.emoji === cat.iconUrl)
+                      ? cat.iconUrl
+                      : getCategoryIcon(cat.name).emoji}
+                  </span>
                 </div>
                 <div>
                   <h4 className="font-medium text-warm-800">{cat.name}</h4>
@@ -194,17 +235,32 @@ export default function CategoriesPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-warm-700 mb-1">
-                  Icon URL
+                  Icon
                 </label>
-                <input
-                  type="url"
-                  value={formData.iconUrl}
-                  onChange={(e) =>
-                    setFormData((f) => ({ ...f, iconUrl: e.target.value }))
-                  }
-                  className="w-full px-3 py-2 border border-warm-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
-                  placeholder="https://..."
-                />
+                <div className="grid grid-cols-10 gap-1.5">
+                  {ICON_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.emoji}
+                      type="button"
+                      onClick={() =>
+                        setFormData((f) => ({ ...f, iconUrl: opt.emoji }))
+                      }
+                      title={opt.label}
+                      className={`w-9 h-9 flex items-center justify-center rounded-lg text-lg transition-colors ${
+                        formData.iconUrl === opt.emoji
+                          ? 'bg-primary-100 ring-2 ring-primary-500'
+                          : 'bg-warm-50 hover:bg-warm-100'
+                      }`}
+                    >
+                      {opt.emoji}
+                    </button>
+                  ))}
+                </div>
+                {formData.iconUrl && (
+                  <p className="text-xs text-warm-500 mt-1.5">
+                    Selected: {formData.iconUrl}
+                  </p>
+                )}
               </div>
               <div className="flex gap-3 pt-2">
                 <button

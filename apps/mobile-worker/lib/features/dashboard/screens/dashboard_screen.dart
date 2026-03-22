@@ -269,7 +269,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             Switch(
                               value: _isAvailable,
                               onChanged: _toggleAvailability,
-                              activeColor: AppColors.success,
+                              activeThumbColor: AppColors.success,
                               activeTrackColor: AppColors.success.withValues(alpha: 0.3),
                             ),
                           ],
