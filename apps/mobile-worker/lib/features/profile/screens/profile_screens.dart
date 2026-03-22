@@ -875,21 +875,65 @@ class _SettingsLinkItem extends StatelessWidget {
 }
 
 // ── Worker Reviews Screen ──
-class _WorkerReviewsScreen extends StatelessWidget {
+class _WorkerReviewsScreen extends StatefulWidget {
   final double rating;
   final int totalJobs;
   const _WorkerReviewsScreen({required this.rating, required this.totalJobs});
+
+  @override
+  State<_WorkerReviewsScreen> createState() => _WorkerReviewsScreenState();
+}
+
+class _WorkerReviewsScreenState extends State<_WorkerReviewsScreen> {
+  List<dynamic> _reviews = [];
+  bool _isLoading = true;
+  double _liveRating = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _liveRating = widget.rating;
+    _fetchReviews();
+  }
+
+  Future<void> _fetchReviews() async {
+    try {
+      final data = await ApiService().getMe();
+      final wp = data['user']?['workerProfile'];
+      final reviews = wp?['reviews'] as List? ?? [];
+      if (mounted) {
+        setState(() {
+          _reviews = reviews;
+          _liveRating = (wp?['rating'] ?? widget.rating).toDouble();
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  String _timeAgo(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final diff = DateTime.now().difference(DateTime.parse(dateStr));
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      if (diff.inDays < 30) return '${diff.inDays}d ago';
+      return '${(diff.inDays / 30).round()}mo ago';
+    } catch (_) { return ''; }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Reviews & Ratings')),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Container(
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 color: AppColors.surface,
@@ -898,28 +942,86 @@ class _WorkerReviewsScreen extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  Text(rating.toStringAsFixed(1), style: AppTypography.displayLarge.copyWith(color: AppColors.primary)),
+                  Text(_liveRating.toStringAsFixed(1), style: AppTypography.displayLarge.copyWith(color: AppColors.primary)),
                   const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: List.generate(5, (i) => Icon(
-                      i < rating.round() ? Icons.star_rounded : Icons.star_outline_rounded,
+                      i < _liveRating.round() ? Icons.star_rounded : Icons.star_outline_rounded,
                       color: AppColors.badgeGold, size: 24,
                     )),
                   ),
                   const SizedBox(height: 8),
-                  Text('Based on $totalJobs jobs', style: AppTypography.bodySmall),
+                  Text('${_reviews.length} review${_reviews.length == 1 ? '' : 's'} · ${widget.totalJobs} jobs', style: AppTypography.bodySmall),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-            const Expanded(
-              child: Center(
-                child: Text('Individual reviews will appear here as you complete more jobs.', textAlign: TextAlign.center),
-              ),
-            ),
-          ],
-        ),
+          ),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _reviews.isEmpty
+                    ? Center(
+                        child: Text('No reviews yet. Complete jobs to receive reviews!',
+                            style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
+                            textAlign: TextAlign.center),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        itemCount: _reviews.length,
+                        separatorBuilder: (_, __) => const Divider(height: 24),
+                        itemBuilder: (_, i) {
+                          final r = _reviews[i];
+                          final customerName = r['customer']?['user']?['name'] ?? 'Customer';
+                          final jobTitle = r['job']?['title'] ?? '';
+                          final rating = (r['rating'] as num?)?.toInt() ?? 0;
+                          final comment = r['comment'] ?? '';
+                          final createdAt = r['createdAt']?.toString();
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 18,
+                                    backgroundColor: AppColors.surfaceVariant,
+                                    child: Text(
+                                      customerName.isNotEmpty ? customerName[0].toUpperCase() : '?',
+                                      style: AppTypography.labelMedium.copyWith(color: AppColors.primary),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(customerName, style: AppTypography.headlineSmall),
+                                        if (jobTitle.isNotEmpty)
+                                          Text(jobTitle, style: AppTypography.labelSmall),
+                                      ],
+                                    ),
+                                  ),
+                                  Text(_timeAgo(createdAt), style: AppTypography.labelSmall),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: List.generate(5, (s) => Icon(
+                                  s < rating ? Icons.star_rounded : Icons.star_outline_rounded,
+                                  color: AppColors.badgeGold, size: 16,
+                                )),
+                              ),
+                              if (comment.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Text(comment, style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                              ],
+                            ],
+                          );
+                        },
+                      ),
+          ),
+        ],
       ),
     );
   }

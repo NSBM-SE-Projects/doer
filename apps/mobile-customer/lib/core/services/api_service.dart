@@ -184,6 +184,16 @@ class ApiService {
     return resp.data['worker'];
   }
 
+  // ══ UPLOAD ══
+
+  Future<List<String>> uploadImages(List<String> base64Images, {String folder = 'doer/jobs'}) async {
+    final resp = await _dio.post('/upload/multiple', data: {
+      'images': base64Images,
+      'folder': folder,
+    });
+    return List<String>.from(resp.data['urls']);
+  }
+
   // ══ JOBS ══
 
   Future<Map<String, dynamic>> createJob({
@@ -191,21 +201,34 @@ class ApiService {
     required String description,
     required String categoryId,
     double? price,
+    double? budgetMin,
+    double? budgetMax,
+    String? urgency,
     double? latitude,
     double? longitude,
     String? address,
     String? scheduledAt,
+    List<String>? imageUrls,
   }) async {
     final resp = await _dio.post('/jobs', data: {
       'title': title,
       'description': description,
       'categoryId': categoryId,
       if (price != null) 'price': price,
+      if (budgetMin != null) 'budgetMin': budgetMin,
+      if (budgetMax != null) 'budgetMax': budgetMax,
+      if (urgency != null) 'urgency': urgency,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
       if (address != null) 'address': address,
+      if (imageUrls != null && imageUrls.isNotEmpty) 'imageUrls': imageUrls,
       if (scheduledAt != null) 'scheduledAt': scheduledAt,
     });
+    return resp.data;
+  }
+
+  Future<Map<String, dynamic>> closeJob(String id) async {
+    final resp = await _dio.patch('/jobs/$id/close');
     return resp.data;
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../theme/app_theme.dart';
 import '../constants/app_constants.dart';
 
@@ -173,6 +174,8 @@ class JobListingCard extends StatelessWidget {
   final String location;
   final double distance;
   final String postedAt;
+  final double? lat;
+  final double? lng;
   final VoidCallback? onTap;
 
   const JobListingCard({
@@ -184,6 +187,8 @@ class JobListingCard extends StatelessWidget {
     required this.location,
     required this.distance,
     required this.postedAt,
+    this.lat,
+    this.lng,
     this.onTap,
   });
 
@@ -192,85 +197,119 @@ class JobListingCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.border),
         ),
+        clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Center(
-                    child: Text(categoryIcon,
-                        style: const TextStyle(fontSize: 20)),
+            // Mini map
+            if (lat != null && lng != null)
+              SizedBox(
+                height: 100,
+                width: double.infinity,
+                child: IgnorePointer(
+                  child: GoogleMap(
+                    initialCameraPosition: CameraPosition(
+                      target: LatLng(lat!, lng!),
+                      zoom: 14,
+                    ),
+                    markers: {
+                      Marker(
+                        markerId: const MarkerId('job'),
+                        position: LatLng(lat!, lng!),
+                      ),
+                    },
+                    zoomControlsEnabled: false,
+                    scrollGesturesEnabled: false,
+                    rotateGesturesEnabled: false,
+                    tiltGesturesEnabled: false,
+                    myLocationButtonEnabled: false,
+                    liteModeEnabled: true,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Text(title, style: AppTypography.headlineSmall),
-                      const SizedBox(height: 2),
-                      Text(category, style: AppTypography.bodySmall),
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceVariant,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Center(
+                          child: Text(categoryIcon,
+                              style: const TextStyle(fontSize: 20)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(title, style: AppTypography.headlineSmall),
+                            const SizedBox(height: 2),
+                            Text(category, style: AppTypography.bodySmall),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            budget,
+                            style: AppTypography.headlineSmall.copyWith(
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          Text(postedAt, style: AppTypography.labelSmall),
+                        ],
+                      ),
                     ],
                   ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      budget,
-                      style: AppTypography.headlineSmall.copyWith(
-                        color: AppColors.primary,
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on_outlined,
+                          size: 14, color: AppColors.textTertiary),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          location,
+                          style: AppTypography.labelSmall,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                    Text(postedAt, style: AppTypography.labelSmall),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(Icons.location_on_outlined,
-                    size: 14, color: AppColors.textTertiary),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    location,
-                    style: AppTypography.labelSmall,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                      const SizedBox(width: 8),
+                      Container(
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLight.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '${distance.toStringAsFixed(1)} km',
+                          style: AppTypography.labelSmall.copyWith(
+                            color: AppColors.primaryDark,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryLight.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    '${distance.toStringAsFixed(1)} km',
-                    style: AppTypography.labelSmall.copyWith(
-                      color: AppColors.primaryDark,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),

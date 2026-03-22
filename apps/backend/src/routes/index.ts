@@ -9,6 +9,7 @@ import notificationRoutes from './notifications';
 import paymentRoutes from './payments';
 import mapRoutes from './maps';
 import agoraRoutes from './agora';
+import uploadRoutes from './upload';
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use('/notifications', notificationRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/maps', mapRoutes);
 router.use('/agora', agoraRoutes);
+router.use('/upload', uploadRoutes);
 
 export default router;
