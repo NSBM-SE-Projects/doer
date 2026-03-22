@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum Role {
@@ -14,10 +15,27 @@ enum Role {
 
 enum JobStatus {
   OPEN
+  APPLICATIONS_RECEIVED
   ASSIGNED
   IN_PROGRESS
   COMPLETED
+  REVIEWING
+  CLOSED
   CANCELLED
+}
+
+enum Urgency {
+  LOW
+  NORMAL
+  URGENT
+  EMERGENCY
+}
+
+enum ApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
 }
 
 enum VerificationStatus {
@@ -30,6 +48,7 @@ model User {
   id                 String             @id @default(cuid())
   firebaseUid        String             @unique
   email              String             @unique
+  passwordHash       String?
   name               String
   phone              String?
   avatarUrl          String?
@@ -73,6 +92,7 @@ model WorkerProfile {
   categories         WorkerCategory[]
   jobs               Job[]
   reviews            Review[]
+  applications       JobApplication[]
 }
 
 model ServiceCategory {
@@ -96,18 +116,22 @@ model WorkerCategory {
 }
 
 model Job {
-  id          String          @id @default(cuid())
-  title       String
-  description String
-  status      JobStatus       @default(OPEN)
-  price       Float?
-  latitude    Float?
-  longitude   Float?
-  address     String?
-  scheduledAt DateTime?
-  completedAt DateTime?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id           String          @id @default(cuid())
+  title        String
+  description  String
+  status       JobStatus       @default(OPEN)
+  price        Float?
+  budgetMin    Float?
+  budgetMax    Float?
+  urgency      Urgency         @default(NORMAL)
+  latitude     Float?
+  longitude    Float?
+  address      String?
+  scheduledAt  DateTime?
+  scheduledEnd DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 
   customerId  String
   workerId    String?
@@ -117,9 +141,27 @@ model Job {
   worker      WorkerProfile?  @relation(fields: [workerId], references: [id])
   category    ServiceCategory @relation(fields: [categoryId], references: [id])
 
-  messages    Message[]
-  review      Review?
-  payment     Payment?
+  messages      Message[]
+  review        Review?
+  payment       Payment?
+  applications  JobApplication[]
+}
+
+model JobApplication {
+  id        String            @id @default(cuid())
+  status    ApplicationStatus @default(PENDING)
+  message   String?
+  price     Float?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  jobId     String
+  workerId  String
+
+  job       Job           @relation(fields: [jobId], references: [id])
+  worker    WorkerProfile @relation(fields: [workerId], references: [id])
+
+  @@unique([jobId, workerId])
 }
 
 model Review {

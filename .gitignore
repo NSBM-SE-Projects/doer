@@ -22,6 +22,10 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Firebase config (contains API keys)
+**/google-services.json
+**/GoogleService-Info.plist
+
 # Prisma
 apps/backend/prisma/migrations/
 
@@ -32,3 +36,5 @@ apps/mobile-worker/.dart_tool/
 apps/mobile-worker/build/
 *.g.dart
 *.freezed.dart
+
+TODO.md
