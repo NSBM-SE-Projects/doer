@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { getJobs, getCategories } from '../services/api';
+import { getJobs, getCategories, adminCloseJob } from '../services/api';
 import {
   Search,
   ChevronLeft,
@@ -9,6 +9,7 @@ import {
   Clock,
   DollarSign,
   Filter,
+  CheckCircle,
 } from 'lucide-react';
 
 const STATUS_OPTIONS = [
@@ -247,13 +248,49 @@ export default function JobsPage() {
 
       {/* Job Detail Modal */}
       {selectedJob && (
-        <JobDetailModal job={selectedJob} onClose={() => setSelectedJob(null)} />
+        <JobDetailModal
+          job={selectedJob}
+          onClose={() => setSelectedJob(null)}
+          onJobUpdated={() => {
+            setSelectedJob(null);
+            fetchJobs();
+          }}
+        />
       )}
     </div>
   );
 }
 
-function JobDetailModal({ job, onClose }: { job: any; onClose: () => void }) {
+function JobDetailModal({
+  job,
+  onClose,
+  onJobUpdated,
+}: {
+  job: any;
+  onClose: () => void;
+  onJobUpdated: () => void;
+}) {
+  const [closing, setClosing] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const handleCloseJob = async () => {
+    if (!confirm('Are you sure you want to close this job?')) return;
+    setClosing(true);
+    setError('');
+    try {
+      await adminCloseJob(job.id);
+      setSuccess('Job closed successfully');
+      setTimeout(onJobUpdated, 1000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to close job');
+    } finally {
+      setClosing(false);
+    }
+  };
+
+  const canClose = job.status === 'REVIEWING' || job.status === 'COMPLETED';
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
@@ -370,6 +407,29 @@ function JobDetailModal({ job, onClose }: { job: any; onClose: () => void }) {
                   messages
                 </p>
               </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>
+          )}
+          {success && (
+            <div className="p-3 bg-green-50 text-green-700 rounded-lg text-sm">{success}</div>
+          )}
+
+          {canClose && (
+            <div className="border-t border-warm-300 pt-4">
+              <button
+                onClick={handleCloseJob}
+                disabled={closing}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm font-medium transition-colors"
+              >
+                <CheckCircle size={16} />
+                {closing ? 'Closing...' : 'Close Job'}
+              </button>
+              <p className="text-xs text-warm-400 mt-1">
+                This will mark the job as completed and notify both parties.
+              </p>
             </div>
           )}
         </div>

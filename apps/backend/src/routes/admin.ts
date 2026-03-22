@@ -216,22 +216,54 @@ router.patch(
 );
 
 // ---------------------------------------------------------------------------
-// DELETE /admin/users/:id — Soft delete user (set isActive: false)
+// DELETE /admin/users/:id — Delete user and all associated data
 // ---------------------------------------------------------------------------
 router.delete(
   '/users/:id',
   asyncHandler(async (req: AuthRequest, res: Response) => {
+    const userId = req.params.id as string;
     const user = await prisma.user.findUnique({
-      where: { id: req.params.id as string },
+      where: { id: userId },
+      include: { customerProfile: true, workerProfile: true },
     });
     if (!user) throw AppError.notFound('User not found');
 
-    const updated = await prisma.user.update({
-      where: { id: req.params.id as string },
-      data: { isActive: false },
+    await prisma.$transaction(async (tx) => {
+      await tx.message.deleteMany({ where: { senderId: userId } });
+      await tx.notification.deleteMany({ where: { userId } });
+
+      if (user.customerProfile) {
+        const profileId = user.customerProfile.id;
+        const jobs = await tx.job.findMany({ where: { customerId: profileId }, select: { id: true } });
+        const jobIds = jobs.map((j) => j.id);
+        if (jobIds.length > 0) {
+          await tx.payment.deleteMany({ where: { jobId: { in: jobIds } } });
+          await tx.review.deleteMany({ where: { jobId: { in: jobIds } } });
+          await tx.message.deleteMany({ where: { jobId: { in: jobIds } } });
+          await tx.jobApplication.deleteMany({ where: { jobId: { in: jobIds } } });
+          await tx.job.deleteMany({ where: { id: { in: jobIds } } });
+        }
+        await tx.review.deleteMany({ where: { customerId: profileId } });
+        await tx.customerProfile.delete({ where: { id: profileId } });
+      }
+
+      if (user.workerProfile) {
+        const profileId = user.workerProfile.id;
+        await tx.workerCategory.deleteMany({ where: { workerId: profileId } });
+        await tx.jobApplication.deleteMany({ where: { workerId: profileId } });
+        await tx.review.deleteMany({ where: { workerId: profileId } });
+        await tx.portfolioItem.deleteMany({ where: { workerId: profileId } });
+        await tx.job.updateMany({
+          where: { workerId: profileId },
+          data: { workerId: null, status: 'CANCELLED' },
+        });
+        await tx.workerProfile.delete({ where: { id: profileId } });
+      }
+
+      await tx.user.delete({ where: { id: userId } });
     });
 
-    res.json({ message: 'User deactivated', user: updated });
+    res.json({ message: 'User deleted' });
   })
 );
 
@@ -251,6 +283,35 @@ router.get(
         qualificationDocs: true,
       },
       orderBy: { user: { createdAt: 'asc' } },
+    });
+
+    res.json({ workers });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /admin/workers — List all workers with optional status filter
+// ---------------------------------------------------------------------------
+router.get(
+  '/workers',
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { status } = req.query;
+
+    const where: any = {};
+    if (status && typeof status === 'string') {
+      where.verificationStatus = status;
+    }
+
+    const workers = await prisma.workerProfile.findMany({
+      where,
+      include: {
+        user: {
+          select: { id: true, name: true, email: true, phone: true, avatarUrl: true, createdAt: true },
+        },
+        categories: { include: { category: true } },
+        qualificationDocs: true,
+      },
+      orderBy: { user: { createdAt: 'desc' } },
     });
 
     res.json({ workers });
@@ -370,6 +431,131 @@ router.get(
 );
 
 // ---------------------------------------------------------------------------
+// PATCH /admin/jobs/:id/close — Admin closes a REVIEWING or COMPLETED job
+// ---------------------------------------------------------------------------
+router.patch(
+  '/jobs/:id/close',
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const job = await prisma.job.findUnique({
+      where: { id: req.params.id as string },
+      include: {
+        customer: { include: { user: { select: { id: true, name: true } } } },
+        worker: { include: { user: { select: { id: true, name: true } } } },
+      },
+    });
+    if (!job) throw AppError.notFound('Job not found');
+    if (job.status !== 'REVIEWING' && job.status !== 'COMPLETED') {
+      throw AppError.badRequest('Job must be in REVIEWING or COMPLETED status to close');
+    }
+
+    const updated = await prisma.job.update({
+      where: { id: req.params.id as string },
+      data: { status: 'CLOSED' },
+      include: {
+        category: true,
+        customer: { include: { user: { select: { id: true, name: true } } } },
+        worker: { include: { user: { select: { id: true, name: true } } } },
+        payment: true,
+      },
+    });
+
+    // Notify both parties
+    const { createNotification } = await import('./notifications');
+    await createNotification(
+      job.customer.userId,
+      'Job Closed',
+      `Your job "${job.title}" has been closed by an administrator.`
+    );
+    if (job.worker) {
+      await createNotification(
+        job.worker.userId,
+        'Job Closed',
+        `The job "${job.title}" has been closed by an administrator.`
+      );
+    }
+
+    res.json({ job: updated });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// PATCH /admin/disputes/:id/resolve — Resolve a dispute with compensation
+// ---------------------------------------------------------------------------
+const resolveDisputeSchema = z.object({
+  resolution: z.enum(['refund_customer', 'pay_worker', 'no_compensation']),
+  notes: z.string().optional(),
+});
+
+router.patch(
+  '/disputes/:id/resolve',
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { resolution, notes } = resolveDisputeSchema.parse(req.body);
+
+    const job = await prisma.job.findUnique({
+      where: { id: req.params.id as string },
+      include: {
+        customer: { include: { user: { select: { id: true, name: true } } } },
+        worker: { include: { user: { select: { id: true, name: true } } } },
+        payment: true,
+      },
+    });
+    if (!job) throw AppError.notFound('Job not found');
+    if (job.status !== 'CANCELLED') throw AppError.badRequest('Only cancelled jobs can be resolved as disputes');
+    if (!job.workerId) throw AppError.badRequest('No worker was assigned to this job');
+
+    // Update payment status based on resolution
+    if (job.payment) {
+      let paymentStatus = job.payment.status;
+      if (resolution === 'refund_customer') paymentStatus = 'REFUNDED';
+      else if (resolution === 'pay_worker') paymentStatus = 'COMPLETED';
+
+      if (paymentStatus !== job.payment.status) {
+        await prisma.payment.update({
+          where: { id: job.payment.id },
+          data: { status: paymentStatus },
+        });
+      }
+    }
+
+    // Notify both parties about the resolution
+    const { createNotification } = await import('./notifications');
+    const resolutionText =
+      resolution === 'refund_customer'
+        ? 'A refund will be issued to the customer.'
+        : resolution === 'pay_worker'
+        ? 'The worker will be compensated for their work.'
+        : 'No compensation will be issued.';
+
+    await createNotification(
+      job.customer.userId,
+      'Dispute Resolved',
+      `The dispute for "${job.title}" has been resolved. ${resolutionText}`
+    );
+    if (job.worker) {
+      await createNotification(
+        job.worker.userId,
+        'Dispute Resolved',
+        `The dispute for "${job.title}" has been resolved. ${resolutionText}`
+      );
+    }
+
+    res.json({
+      message: 'Dispute resolved',
+      resolution,
+      notes,
+      job: await prisma.job.findUnique({
+        where: { id: job.id },
+        include: {
+          customer: { include: { user: { select: { id: true, name: true } } } },
+          worker: { include: { user: { select: { id: true, name: true } } } },
+          payment: true,
+        },
+      }),
+    });
+  })
+);
+
+// ---------------------------------------------------------------------------
 // GET /admin/disputes — List disputed/cancelled jobs
 // ---------------------------------------------------------------------------
 router.get(
@@ -378,10 +564,7 @@ router.get(
     const disputes = await prisma.job.findMany({
       where: {
         status: 'CANCELLED',
-        OR: [
-          { review: { isNot: null } },
-          { messages: { some: {} } },
-        ],
+        workerId: { not: null },
       },
       include: {
         category: true,

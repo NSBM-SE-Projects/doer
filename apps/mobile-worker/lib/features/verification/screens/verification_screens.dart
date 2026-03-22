@@ -30,7 +30,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
   String? _rejectionReason;
   String? _nicFrontUrl;
   String? _nicBackUrl;
+  bool _nicVerified = false;
+  bool _qualificationsVerified = false;
   String? _backgroundCheckUrl;
+  bool _backgroundCheckVerified = false;
   List<dynamic> _qualificationDocs = [];
   String? _nextBadge;
   String _nextBadgeHint = '';
@@ -51,7 +54,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
         _rejectionReason = data['rejectionReason'];
         _nicFrontUrl = data['nicFrontUrl'];
         _nicBackUrl = data['nicBackUrl'];
+        _nicVerified = data['nicVerified'] == true;
+        _qualificationsVerified = data['qualificationsVerified'] == true;
         _backgroundCheckUrl = data['backgroundCheckUrl'];
+        _backgroundCheckVerified = data['backgroundCheckVerified'] == true;
         _qualificationDocs = data['qualificationDocs'] ?? [];
         _nextBadge = data['nextBadge'];
         _nextBadgeHint = data['nextBadgeHint'] ?? '';
@@ -166,8 +172,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
             // NIC Verification
             VerificationCard(
               title: 'National Identity Card',
-              subtitle: _nicFrontUrl != null ? 'Documents uploaded' : 'Upload front & back of your NIC',
-              status: _nicFrontUrl != null ? displayStatus : VerificationStatus.pending,
+              subtitle: _nicVerified ? 'Verified' : _nicFrontUrl != null ? 'Pending review' : 'Upload front & back of your NIC',
+              status: _nicVerified ? VerificationStatus.approved : _nicFrontUrl != null ? VerificationStatus.submitted : VerificationStatus.pending,
               icon: Icons.badge_outlined,
               onTap: () async {
                 final result = await Navigator.push(
@@ -183,10 +189,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
             // Qualification documents
             VerificationCard(
               title: 'Qualifications & Certificates',
-              subtitle: _qualificationDocs.isNotEmpty
-                  ? '${_qualificationDocs.length} document(s) uploaded'
+              subtitle: _qualificationsVerified ? 'Verified' : _qualificationDocs.isNotEmpty
+                  ? '${_qualificationDocs.length} document(s) — pending review'
                   : 'Upload skill certificates or trade licenses',
-              status: _qualificationDocs.isNotEmpty ? displayStatus : VerificationStatus.pending,
+              status: _qualificationsVerified ? VerificationStatus.approved : _qualificationDocs.isNotEmpty ? VerificationStatus.submitted : VerificationStatus.pending,
               icon: Icons.workspace_premium_outlined,
               onTap: () async {
                 final result = await Navigator.push(
@@ -202,8 +208,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
             // Background check
             VerificationCard(
               title: 'Background Check',
-              subtitle: _backgroundCheckUrl != null ? 'Certificate uploaded' : 'Police clearance certificate',
-              status: _backgroundCheckUrl != null ? displayStatus : VerificationStatus.pending,
+              subtitle: _backgroundCheckVerified ? 'Verified' : _backgroundCheckUrl != null ? 'Pending review' : 'Police clearance certificate',
+              status: _backgroundCheckVerified ? VerificationStatus.approved : _backgroundCheckUrl != null ? VerificationStatus.submitted : VerificationStatus.pending,
               icon: Icons.security_outlined,
               onTap: () {
                 _showBackgroundCheckUpload(context);
@@ -291,13 +297,51 @@ class _VerificationScreenState extends State<VerificationScreen> {
           children: [
             Text('Background Check', style: AppTypography.headlineLarge),
             const SizedBox(height: 12),
-            Text(
-              'A background check requires submitting a Police Clearance Certificate (PCC) from your local police station.\n\nThis is reviewed manually by our team within 3-5 business days.',
-              style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
-            ),
+            if (_backgroundCheckUrl != null) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _backgroundCheckVerified ? AppColors.successLight : AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(children: [
+                  Icon(
+                    _backgroundCheckVerified ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
+                    color: _backgroundCheckVerified ? AppColors.success : AppColors.warning,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _backgroundCheckVerified ? 'Certificate verified' : 'Certificate uploaded — pending review',
+                      style: AppTypography.bodyMedium,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => Scaffold(
+                          backgroundColor: Colors.black,
+                          appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white),
+                          body: Center(child: InteractiveViewer(child: Image.network(_backgroundCheckUrl!, fit: BoxFit.contain))),
+                        ),
+                      ));
+                    },
+                    child: Text('View', style: AppTypography.labelMedium.copyWith(color: AppColors.primary)),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 12),
+            ] else ...[
+              Text(
+                'A background check requires submitting a Police Clearance Certificate (PCC) from your local police station.\n\nThis is reviewed manually by our team within 3-5 business days.',
+                style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
             const SizedBox(height: 20),
             DoerButton(
-              label: 'Upload Police Certificate',
+              label: _backgroundCheckUrl != null ? 'Re-upload Certificate' : 'Upload Police Certificate',
               onPressed: () async {
                 Navigator.pop(context);
                 final picker = ImagePicker();
@@ -391,6 +435,29 @@ class _NicUploadScreenState extends State<NicUploadScreen> {
   bool _isSubmitting = false;
   final _nicController = TextEditingController();
   final _picker = ImagePicker();
+  String? _existingFrontUrl;
+  String? _existingBackUrl;
+  bool _nicVerified = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExisting();
+  }
+
+  Future<void> _loadExisting() async {
+    try {
+      final data = await ApiService().getVerificationStatus();
+      if (mounted) {
+        setState(() {
+          _nicController.text = data['nicNumber'] ?? '';
+          _existingFrontUrl = data['nicFrontUrl'];
+          _existingBackUrl = data['nicBackUrl'];
+          _nicVerified = data['nicVerified'] == true;
+        });
+      }
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -453,7 +520,9 @@ class _NicUploadScreenState extends State<NicUploadScreen> {
   @override
   Widget build(BuildContext context) {
     final nicFilled = _nicController.text.trim().isNotEmpty;
-    final canSubmit = _frontFile != null && _backFile != null && nicFilled;
+    final hasFront = _frontFile != null || _existingFrontUrl != null;
+    final hasBack = _backFile != null || _existingBackUrl != null;
+    final canSubmit = (_frontFile != null || _backFile != null) && nicFilled;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -500,6 +569,7 @@ class _NicUploadScreenState extends State<NicUploadScreen> {
               label: 'NIC Front',
               icon: Icons.credit_card_outlined,
               file: _frontFile,
+              existingUrl: _existingFrontUrl,
               onTap: () => _pickImage(true),
             ),
 
@@ -509,8 +579,28 @@ class _NicUploadScreenState extends State<NicUploadScreen> {
               label: 'NIC Back',
               icon: Icons.credit_card_outlined,
               file: _backFile,
+              existingUrl: _existingBackUrl,
               onTap: () => _pickImage(false),
             ),
+
+            if (_nicVerified)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.successLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 20),
+                      const SizedBox(width: 8),
+                      Text('NIC Verified', style: AppTypography.headlineSmall.copyWith(color: AppColors.success)),
+                    ],
+                  ),
+                ),
+              ),
 
             const Spacer(),
 
@@ -542,8 +632,28 @@ class QualificationUploadScreen extends StatefulWidget {
 class _QualificationUploadScreenState
     extends State<QualificationUploadScreen> {
   final List<File> _selectedFiles = [];
+  List<dynamic> _existingDocs = [];
+  bool _qualificationsVerified = false;
   bool _isSubmitting = false;
   final _picker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExisting();
+  }
+
+  Future<void> _loadExisting() async {
+    try {
+      final data = await ApiService().getVerificationStatus();
+      if (mounted) {
+        setState(() {
+          _existingDocs = data['qualificationDocs'] ?? [];
+          _qualificationsVerified = data['qualificationsVerified'] == true;
+        });
+      }
+    } catch (_) {}
+  }
 
   Future<void> _addDocument() async {
     final picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
@@ -597,7 +707,61 @@ class _QualificationUploadScreenState
               style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
             ),
 
+            if (_qualificationsVerified)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.successLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 20),
+                    const SizedBox(width: 8),
+                    Text('Qualifications Verified', style: AppTypography.headlineSmall.copyWith(color: AppColors.success)),
+                  ]),
+                ),
+              ),
+
             const SizedBox(height: 24),
+
+            // Existing uploaded docs
+            if (_existingDocs.isNotEmpty) ...[
+              Text('Previously Uploaded', style: AppTypography.labelMedium),
+              const SizedBox(height: 8),
+              ..._existingDocs.map((doc) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: GestureDetector(
+                      onTap: () {
+                        if (doc['url'] != null) {
+                          Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => Scaffold(
+                              backgroundColor: Colors.black,
+                              appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white),
+                              body: Center(child: InteractiveViewer(child: Image.network(doc['url'], fit: BoxFit.contain))),
+                            ),
+                          ));
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(children: [
+                          const Icon(Icons.description_outlined, size: 20, color: AppColors.primary),
+                          const SizedBox(width: 10),
+                          Expanded(child: Text(doc['title'] ?? 'Document', style: AppTypography.bodyMedium)),
+                          const Icon(Icons.open_in_new_rounded, size: 16, color: AppColors.textTertiary),
+                        ]),
+                      ),
+                    ),
+                  )),
+              const SizedBox(height: 16),
+            ],
 
             // Selected files list
             ..._selectedFiles.asMap().entries.map((entry) => Padding(
@@ -680,18 +844,22 @@ class _ImageUploadCard extends StatelessWidget {
   final String label;
   final IconData icon;
   final File? file;
+  final String? existingUrl;
   final VoidCallback onTap;
 
   const _ImageUploadCard({
     required this.label,
     required this.icon,
     required this.file,
+    this.existingUrl,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isUploaded = file != null;
+    final hasLocal = file != null;
+    final hasRemote = existingUrl != null && existingUrl!.isNotEmpty;
+    final hasImage = hasLocal || hasRemote;
 
     return GestureDetector(
       onTap: onTap,
@@ -699,27 +867,34 @@ class _ImageUploadCard extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: isUploaded ? AppColors.successLight : AppColors.surface,
+          color: hasImage ? AppColors.successLight : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isUploaded
+            color: hasImage
                 ? AppColors.success.withValues(alpha: 0.4)
                 : AppColors.border,
           ),
         ),
-        child: isUploaded
+        child: hasImage
             ? Row(
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.file(file!, width: 60, height: 60, fit: BoxFit.cover),
+                    child: hasLocal
+                        ? Image.file(file!, width: 60, height: 60, fit: BoxFit.cover)
+                        : Image.network(existingUrl!, width: 60, height: 60, fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              width: 60, height: 60, color: AppColors.surfaceVariant,
+                              child: const Icon(Icons.image_outlined, color: AppColors.textTertiary),
+                            )),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('$label uploaded', style: AppTypography.headlineSmall.copyWith(color: AppColors.success)),
+                        Text(hasLocal ? '$label ready to upload' : '$label uploaded',
+                            style: AppTypography.headlineSmall.copyWith(color: AppColors.success)),
                         const SizedBox(height: 2),
                         Text('Tap to change', style: AppTypography.labelSmall),
                       ],

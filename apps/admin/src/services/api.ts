@@ -22,8 +22,8 @@ async function request<T>(
   }
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: 'Request failed' }));
-    throw new Error(err.message || `HTTP ${res.status}`);
+    const err = await res.json().catch(() => ({ error: 'Request failed' }));
+    throw new Error(err.error || err.message || `HTTP ${res.status}`);
   }
 
   return res.json();
@@ -62,10 +62,21 @@ export const deleteUser = (id: string) =>
 export const getPendingWorkers = () =>
   request<any>('/admin/workers/pending');
 
-export const verifyWorker = (id: string, status: 'VERIFIED' | 'REJECTED', rejectionReason?: string) =>
-  request<any>(`/users/${id}/verify`, {
+export const getAllWorkers = (status?: string) => {
+  const qs = status ? `?status=${status}` : '';
+  return request<any>(`/admin/workers${qs}`);
+};
+
+export const verifyWorker = (userId: string, data: {
+  status?: 'VERIFIED' | 'REJECTED' | 'PENDING';
+  rejectionReason?: string;
+  nicVerified?: boolean;
+  qualificationsVerified?: boolean;
+  backgroundCheckVerified?: boolean;
+}) =>
+  request<any>(`/users/${userId}/verify`, {
     method: 'PATCH',
-    body: JSON.stringify({ status, rejectionReason }),
+    body: JSON.stringify(data),
   });
 
 // Jobs
@@ -77,7 +88,7 @@ export const getJobs = (params: Record<string, string>) => {
 export const getJob = (id: string) => request<any>(`/jobs/${id}`);
 
 // Categories
-export const getCategories = () => request<any[]>('/categories');
+export const getCategories = () => request<any>('/categories');
 
 export const createCategory = (data: { name: string; description?: string; iconUrl?: string }) =>
   request<any>('/categories', {
@@ -100,5 +111,18 @@ export const getPayments = (params: Record<string, string>) => {
   return request<any>(`/admin/payments?${qs}`);
 };
 
+// Jobs - Admin Actions
+export const adminCloseJob = (id: string) =>
+  request<any>(`/admin/jobs/${id}/close`, { method: 'PATCH' });
+
 // Disputes
 export const getDisputes = () => request<any>('/admin/disputes');
+
+export const resolveDispute = (id: string, data: {
+  resolution: 'refund_customer' | 'pay_worker' | 'no_compensation';
+  notes?: string;
+}) =>
+  request<any>(`/admin/disputes/${id}/resolve`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });

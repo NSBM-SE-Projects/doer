@@ -92,12 +92,15 @@ model WorkerProfile {
   latitude           Float?
   longitude          Float?
   nicNumber          String?
-  nicFrontUrl        String?
-  nicBackUrl         String?
-  backgroundCheckUrl String?
-  badgeLevel         BadgeLevel         @default(TRAINEE)
-  rejectionReason    String?
-  verificationStatus VerificationStatus @default(NOT_SUBMITTED)
+  nicFrontUrl            String?
+  nicBackUrl             String?
+  nicVerified            Boolean            @default(false)
+  qualificationsVerified Boolean            @default(false)
+  backgroundCheckUrl     String?
+  backgroundCheckVerified Boolean           @default(false)
+  badgeLevel             BadgeLevel         @default(TRAINEE)
+  rejectionReason        String?
+  verificationStatus     VerificationStatus @default(NOT_SUBMITTED)
   isAvailable        Boolean            @default(true)
   rating             Float              @default(0)
   totalJobs          Int                @default(0)
