@@ -19,6 +19,9 @@ class SocketService {
   void Function(dynamic)? onNewMessage;
   void Function(dynamic)? onNewNotification;
   void Function(dynamic)? onUserTyping;
+  void Function(dynamic)? onIncomingCall;
+  void Function(dynamic)? onCallEnded;
+  void Function(dynamic)? onCallDeclined;
 
   /// Connect to Socket.IO server with JWT auth
   Future<void> connect() async {
@@ -38,47 +41,39 @@ class SocketService {
           .build(),
     );
 
-    _socket!.onConnect((_) {
-      print('Socket connected: ${_socket!.id}');
-    });
+    _socket!.onConnect((_) => print('Socket connected: ${_socket!.id}'));
 
-    _socket!.on('new_message', (data) {
-      onNewMessage?.call(data);
-    });
+    _socket!.on('new_message', (data) => onNewMessage?.call(data));
+    _socket!.on('new_notification', (data) => onNewNotification?.call(data));
+    _socket!.on('user_typing', (data) => onUserTyping?.call(data));
+    _socket!.on('incoming_call', (data) => onIncomingCall?.call(data));
+    _socket!.on('call_ended', (data) => onCallEnded?.call(data));
+    _socket!.on('call_declined', (data) => onCallDeclined?.call(data));
 
-    _socket!.on('new_notification', (data) {
-      onNewNotification?.call(data);
-    });
+    _socket!.onDisconnect((_) => print('Socket disconnected'));
+    _socket!.onConnectError((err) => print('Socket connection error: $err'));
+  }
 
-    _socket!.on('user_typing', (data) {
-      onUserTyping?.call(data);
-    });
+  void joinJob(String jobId) => _socket?.emit('join_job', jobId);
+  void leaveJob(String jobId) => _socket?.emit('leave_job', jobId);
+  void emitTyping(String jobId) => _socket?.emit('typing', {'jobId': jobId});
 
-    _socket!.onDisconnect((_) {
-      print('Socket disconnected');
-    });
-
-    _socket!.onConnectError((err) {
-      print('Socket connection error: $err');
+  void callUser({required String targetUserId, required String channelName, required String callerName}) {
+    _socket?.emit('call_user', {
+      'targetUserId': targetUserId,
+      'channelName': channelName,
+      'callerName': callerName,
     });
   }
 
-  /// Join a job room to receive messages for that job
-  void joinJob(String jobId) {
-    _socket?.emit('join_job', jobId);
+  void endCall({required String targetUserId}) {
+    _socket?.emit('call_end', {'targetUserId': targetUserId});
   }
 
-  /// Leave a job room
-  void leaveJob(String jobId) {
-    _socket?.emit('leave_job', jobId);
+  void declineCall({required String targetUserId}) {
+    _socket?.emit('call_decline', {'targetUserId': targetUserId});
   }
 
-  /// Emit typing indicator
-  void emitTyping(String jobId) {
-    _socket?.emit('typing', {'jobId': jobId});
-  }
-
-  /// Disconnect
   void disconnect() {
     _socket?.disconnect();
     _socket?.dispose();

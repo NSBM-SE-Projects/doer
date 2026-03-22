@@ -70,6 +70,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                                   jobId: conv['jobId'],
                                   clientName: other?['name'] ?? 'User',
                                   jobTitle: conv['jobTitle'] ?? '',
+                                  otherUserId: other?['id'],
                                 ),
                               ));
                             },
@@ -101,7 +102,8 @@ class ChatScreen extends StatefulWidget {
   final String clientName;
   final String jobTitle;
 
-  const ChatScreen({super.key, required this.jobId, required this.clientName, required this.jobTitle});
+  final String? otherUserId;
+  const ChatScreen({super.key, required this.jobId, required this.clientName, required this.jobTitle, this.otherUserId});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -227,6 +229,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 builder: (_) => VideoCallScreen(
                   channelName: widget.jobId,
                   remoteName: widget.clientName,
+                  targetUserId: widget.otherUserId,
                 ),
               ));
             },

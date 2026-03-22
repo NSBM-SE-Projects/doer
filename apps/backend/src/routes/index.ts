@@ -8,6 +8,7 @@ import messageRoutes from './messages';
 import notificationRoutes from './notifications';
 import paymentRoutes from './payments';
 import mapRoutes from './maps';
+import agoraRoutes from './agora';
 import adminRoutes from './admin';
 
 const router = Router();
@@ -21,6 +22,7 @@ router.use('/messages', messageRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/maps', mapRoutes);
+router.use('/agora', agoraRoutes);
 router.use('/admin', adminRoutes);
 
 export default router;

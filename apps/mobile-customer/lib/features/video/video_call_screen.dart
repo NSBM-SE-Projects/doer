@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import '../../core/services/video_call_service.dart';
+import '../../core/services/api_service.dart';
+import '../../core/services/socket_service.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 
 /// Full-screen video call UI.
-/// Push this screen with arguments: { 'jobId': String, 'remoteName': String }
 class VideoCallScreen extends StatefulWidget {
-  final String channelName; // jobId used as channel
-  final String remoteName;  // other person's name
+  final String channelName;
+  final String remoteName;
+  final String? targetUserId;
 
   const VideoCallScreen({
     super.key,
     required this.channelName,
     required this.remoteName,
+    this.targetUserId,
   });
 
   @override
@@ -64,10 +68,33 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     };
 
     await _callService.init();
-    await _callService.joinChannel(widget.channelName);
+
+    // Fetch Agora token from backend
+    String token = '';
+    try {
+      final data = await ApiService().getAgoraToken(widget.channelName);
+      token = data['token'] ?? '';
+    } catch (_) {
+      // If token fetch fails, try without token (works if App Certificate is not enabled)
+    }
+
+    await _callService.joinChannel(widget.channelName, token: token);
+
+    // Notify the other user about the incoming call
+    if (widget.targetUserId != null) {
+      final callerName = AuthService().currentUser?.displayName ?? 'Someone';
+      SocketService().callUser(
+        targetUserId: widget.targetUserId!,
+        channelName: widget.channelName,
+        callerName: callerName,
+      );
+    }
   }
 
   Future<void> _endCall() async {
+    if (widget.targetUserId != null) {
+      SocketService().endCall(targetUserId: widget.targetUserId!);
+    }
     await _callService.leaveChannel();
     await _callService.dispose();
     if (mounted) Navigator.pop(context);
@@ -212,17 +239,12 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                     },
                   ),
                   // End call
-                  GestureDetector(
+                  _ControlButton(
+                    icon: Icons.call_end_rounded,
+                    label: 'End',
+                    isActive: true,
+                    isDestructive: true,
                     onTap: _endCall,
-                    child: Container(
-                      width: 64,
-                      height: 64,
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.call_end_rounded, color: Colors.white, size: 28),
-                    ),
                   ),
                   // Toggle camera
                   _ControlButton(
@@ -255,12 +277,14 @@ class _ControlButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool isActive;
+  final bool isDestructive;
   final VoidCallback onTap;
 
   const _ControlButton({
     required this.icon,
     required this.label,
     required this.isActive,
+    this.isDestructive = false,
     required this.onTap,
   });
 
@@ -275,7 +299,11 @@ class _ControlButton extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: isActive ? Colors.white.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.1),
+              color: isDestructive
+                  ? Colors.red
+                  : isActive
+                      ? Colors.white.withValues(alpha: 0.2)
+                      : Colors.white.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: Colors.white, size: 22),

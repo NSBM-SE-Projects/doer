@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
@@ -18,6 +19,16 @@ class _BrowseJobsScreenState extends State<BrowseJobsScreen> {
   int _selectedRadius = 10;
   bool _isLoading = true;
   List<dynamic> _jobs = [];
+  double? _workerLat;
+  double? _workerLng;
+
+  double _calcDistance(double? lat, double? lng) {
+    if (_workerLat == null || _workerLng == null || lat == null || lng == null) return 0;
+    const p = 0.017453292519943295;
+    final a = 0.5 - cos((lat - _workerLat!) * p) / 2 +
+        cos(_workerLat! * p) * cos(lat * p) * (1 - cos((lng - _workerLng!) * p)) / 2;
+    return 12742 * asin(sqrt(a));
+  }
 
   final List<int> _radiusOptions = [5, 10, 15, 25];
 
@@ -36,10 +47,21 @@ class _BrowseJobsScreenState extends State<BrowseJobsScreen> {
   Future<void> _fetchJobs() async {
     setState(() => _isLoading = true);
     try {
+      if (_workerLat == null) {
+        final me = await ApiService().getMe();
+        final wp = me['user']?['workerProfile'];
+        _workerLat = (wp?['lat'] as num?)?.toDouble();
+        _workerLng = (wp?['lng'] as num?)?.toDouble();
+      }
       _jobs = await ApiService().getAvailableJobs();
       setState(() => _isLoading = false);
-    } catch (_) {
+    } catch (e) {
       setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ApiService.errorMessage(e))),
+        );
+      }
     }
   }
 
@@ -181,7 +203,7 @@ class _BrowseJobsScreenState extends State<BrowseJobsScreen> {
                                     ? 'Rs. ${job['price'].toStringAsFixed(0)}'
                                     : 'Negotiable',
                                 location: job['address'] ?? '',
-                                distance: 0,
+                                distance: _calcDistance((job['lat'] as num?)?.toDouble(), (job['lng'] as num?)?.toDouble()),
                                 postedAt: _timeAgo(job['createdAt']),
                                 onTap: () {
                                   Navigator.pushNamed(context, '/job-detail',
@@ -193,7 +215,7 @@ class _BrowseJobsScreenState extends State<BrowseJobsScreen> {
                                       budget: job['price'] != null
                                           ? 'Rs. ${job['price'].toStringAsFixed(0)}'
                                           : 'Negotiable',
-                                      distanceKm: 0,
+                                      distanceKm: _calcDistance((job['lat'] as num?)?.toDouble(), (job['lng'] as num?)?.toDouble()),
                                       postedAt: _timeAgo(job['createdAt']),
                                       clientName: job['customer']?['user']?['name'] ?? 'Customer',
                                       clientRating: 4.5,
@@ -202,6 +224,8 @@ class _BrowseJobsScreenState extends State<BrowseJobsScreen> {
                                       scheduledDate: '',
                                       address: job['address'] ?? '',
                                       status: job['status'],
+                                      lat: (job['lat'] as num?)?.toDouble(),
+                                      lng: (job['lng'] as num?)?.toDouble(),
                                     ),
                                   );
                                 },

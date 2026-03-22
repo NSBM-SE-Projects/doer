@@ -5,6 +5,7 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/AppError';
 import { createNotification } from './notifications';
+import { getIO } from '../sockets';
 import { geocode } from '../config/maps';
 
 const router = Router();
@@ -305,6 +306,9 @@ router.patch(
     const custProfile = await prisma.customerProfile.findUnique({ where: { id: job.customerId } });
     if (custProfile) {
       await createNotification(custProfile.userId, 'Job Started', `Work has begun on "${job.title}"`);
+      // Real-time status update
+      const io = getIO();
+      if (io) io.to(`user:${custProfile.userId}`).emit('job_status_update', { jobId: job.id, status: 'IN_PROGRESS' });
     }
 
     res.json({ job: updated });
@@ -339,7 +343,10 @@ router.patch(
     // Notify customer
     const cp = await prisma.customerProfile.findUnique({ where: { id: job.customerId } });
     if (cp) {
-      await createNotification(cp.userId, 'Job Completed', `"${job.title}" has been completed. Please leave a review!`);
+      await createNotification(cp.userId, 'Job Completed', `"${job.title}" has been completed. Please confirm and leave a review!`);
+      // Real-time status update
+      const io = getIO();
+      if (io) io.to(`user:${cp.userId}`).emit('job_status_update', { jobId: job.id, status: 'COMPLETED' });
     }
 
     res.json({ job: updated });

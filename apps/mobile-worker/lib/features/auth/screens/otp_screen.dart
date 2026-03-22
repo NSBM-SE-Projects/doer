@@ -112,8 +112,10 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               onPressed: _otpCode.length == 6
                   ? () {
                       setState(() => _isLoading = true);
-                      // TODO: Call Firebase Auth verifyOtp
-                      // On success → Navigator.pushReplacementNamed(context, '/');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Verification not required for email accounts')),
+                      );
+                      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
                     }
                   : null,
             ),
@@ -130,7 +132,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       onTap: () {
                         setState(() => _resendCountdown = 30);
                         _startCountdown();
-                        // TODO: Resend OTP
+                        // OTP not used for email auth
                       },
                       child: Text(
                         'Resend code',

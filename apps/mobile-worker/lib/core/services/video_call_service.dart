@@ -52,11 +52,11 @@ class VideoCallService {
   }
 
   /// Join a video call channel (uses jobId as channel name)
-  Future<void> joinChannel(String channelName, {int uid = 0}) async {
+  Future<void> joinChannel(String channelName, {String token = '', int uid = 0}) async {
     if (_engine == null) await init();
 
     await _engine!.joinChannel(
-      token: '', // No token needed in testing mode
+      token: token,
       channelId: channelName,
       uid: uid,
       options: const ChannelMediaOptions(

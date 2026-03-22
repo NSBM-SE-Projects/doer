@@ -74,7 +74,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                     jobTitle: c['jobTitle'] ?? '',
                     unread: false,
                     onTap: () => Navigator.push(context, MaterialPageRoute(
-                      builder: (_) => ChatScreen(jobId: c['jobId'], workerName: other?['name'] ?? 'Worker', jobTitle: c['jobTitle']),
+                      builder: (_) => ChatScreen(jobId: c['jobId'], workerName: other?['name'] ?? 'Worker', jobTitle: c['jobTitle'], otherUserId: other?['id']),
                     )),
                   );
                 },
@@ -98,7 +98,8 @@ class ChatScreen extends StatefulWidget {
   final String? jobId;
   final String? workerName;
   final String? jobTitle;
-  const ChatScreen({super.key, this.jobId, this.workerName, this.jobTitle});
+  final String? otherUserId;
+  const ChatScreen({super.key, this.jobId, this.workerName, this.jobTitle, this.otherUserId});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -136,6 +137,7 @@ class _ChatScreenState extends State<ChatScreen> {
           time: _formatTime(data['createdAt']),
         ));
       });
+      _scrollToBottom();
     };
   }
 
@@ -153,6 +155,7 @@ class _ChatScreenState extends State<ChatScreen> {
         )).toList();
         _isLoading = false;
       });
+      _scrollToBottom();
     } catch (_) {
       setState(() => _isLoading = false);
     }
@@ -166,11 +169,24 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (_) { return ''; }
   }
 
+  void _scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
   Future<void> _sendMessageToApi() async {
     final text = _messageController.text.trim();
     if (text.isEmpty || widget.jobId == null) return;
     _messageController.clear();
     setState(() => _messages.add(_ChatMessage(text: text, isMe: true, time: 'Now')));
+    _scrollToBottom();
     try { await ApiService().sendMessage(widget.jobId!, text); } catch (_) {}
   }
 
@@ -228,6 +244,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     builder: (_) => VideoCallScreen(
                       channelName: widget.jobId!,
                       remoteName: widget.workerName ?? 'Worker',
+                      targetUserId: widget.otherUserId,
                     ),
                   ));
                 }
@@ -287,7 +304,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   // Attachment button
                   GestureDetector(
-                    onTap: () {},
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Image sharing coming soon')),
+                      );
+                    },
                     child: Container(
                       width: 36,
                       height: 36,
