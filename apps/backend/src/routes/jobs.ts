@@ -23,7 +23,6 @@ const createJobSchema = z.object({
   address: z.string().optional(),
   scheduledAt: z.string().datetime().optional(),
   scheduledEnd: z.string().datetime().optional(),
-  imageUrls: z.array(z.string()).optional(),
 });
 
 const updateJobSchema = z.object({
@@ -84,7 +83,6 @@ router.post(
         address: body.address,
         scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : undefined,
         scheduledEnd: body.scheduledEnd ? new Date(body.scheduledEnd) : undefined,
-        imageUrls: body.imageUrls || [],
         customerId: customerProfile.id,
         categoryId: body.categoryId,
       },
