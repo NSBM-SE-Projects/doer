@@ -44,6 +44,14 @@ enum VerificationStatus {
   REJECTED
 }
 
+enum MatchStatus {
+  PENDING
+  NOTIFIED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
 model User {
   id                 String             @id @default(cuid())
   firebaseUid        String             @unique
@@ -87,12 +95,15 @@ model WorkerProfile {
   isAvailable        Boolean            @default(true)
   rating             Float              @default(0)
   totalJobs          Int                @default(0)
+  completionRate     Float              @default(0)
+  badgeLevel         String             @default("trainee")
 
   user               User               @relation(fields: [userId], references: [id])
   categories         WorkerCategory[]
   jobs               Job[]
   reviews            Review[]
   applications       JobApplication[]
+  jobMatches         JobMatch[]
 }
 
 model ServiceCategory {
@@ -145,6 +156,7 @@ model Job {
   review        Review?
   payment       Payment?
   applications  JobApplication[]
+  jobMatches    JobMatch[]
 }
 
 model JobApplication {
@@ -200,6 +212,22 @@ model Payment {
 
   jobId         String   @unique
   job           Job      @relation(fields: [jobId], references: [id])
+}
+
+model JobMatch {
+  id          String      @id @default(cuid())
+  matchScore  Float
+  distanceKm  Float
+  status      MatchStatus @default(PENDING)
+  createdAt   DateTime    @default(now())
+
+  jobId       String
+  workerId    String
+
+  job         Job           @relation(fields: [jobId], references: [id])
+  worker      WorkerProfile @relation(fields: [workerId], references: [id])
+
+  @@unique([jobId, workerId])
 }
 
 model Notification {

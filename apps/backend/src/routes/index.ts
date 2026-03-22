@@ -10,6 +10,7 @@ import paymentRoutes from './payments';
 import mapRoutes from './maps';
 import agoraRoutes from './agora';
 import adminRoutes from './admin';
+import matchingRoutes from './matching';
 
 const router = Router();
 
@@ -17,6 +18,7 @@ router.use('/auth', authRoutes);
 router.use('/categories', categoryRoutes);
 router.use('/users', userRoutes);
 router.use('/jobs', jobRoutes);
+router.use('/jobs', matchingRoutes);
 router.use('/applications', applicationRoutes);
 router.use('/messages', messageRoutes);
 router.use('/notifications', notificationRoutes);
