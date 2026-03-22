@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { getUsers, updateUserStatus } from '../services/api';
+import { getUsers, updateUserStatus, deleteUser, verifyWorker } from '../services/api';
 import {
   Search,
   ChevronLeft,
@@ -7,6 +7,7 @@ import {
   UserCheck,
   UserX,
   Eye,
+  Trash2,
 } from 'lucide-react';
 
 export default function UsersPage() {
@@ -43,12 +44,31 @@ export default function UsersPage() {
     fetchUsers();
   }, [fetchUsers]);
 
+  const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const showAlert = (type: 'success' | 'error', message: string) => {
+    setAlert({ type, message });
+    setTimeout(() => setAlert(null), 3000);
+  };
+
   const toggleStatus = async (userId: string, currentStatus: boolean) => {
     try {
       await updateUserStatus(userId, !currentStatus);
+      showAlert('success', `User ${currentStatus ? 'deactivated' : 'activated'} successfully`);
       fetchUsers();
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      showAlert('error', err.message || 'Failed to update user status');
+    }
+  };
+
+  const handleDelete = async (userId: string, userName: string) => {
+    if (!window.confirm(`Are you sure you want to delete "${userName}"? This cannot be undone.`)) return;
+    try {
+      await deleteUser(userId);
+      showAlert('success', `User "${userName}" deleted successfully`);
+      fetchUsers();
+    } catch (err: any) {
+      showAlert('error', err.message || 'Failed to delete user');
     }
   };
 
@@ -56,6 +76,11 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-4">
+      {alert && (
+        <div className={`p-3 rounded-lg text-sm font-medium ${alert.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+          {alert.message}
+        </div>
+      )}
       {/* Filters */}
       <div className="bg-white rounded-xl border border-warm-300 p-4">
         <div className="flex flex-col sm:flex-row gap-3">
@@ -205,6 +230,13 @@ export default function UsersPage() {
                             <UserCheck size={16} />
                           )}
                         </button>
+                        <button
+                          onClick={() => handleDelete(user.id, user.name)}
+                          className="p-1.5 text-warm-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete user"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -328,6 +360,39 @@ function UserDetailModal({ user, onClose }: { user: any; onClose: () => void }) 
                 <InfoItem label="Total Jobs" value={user.workerProfile.totalJobs} />
                 <InfoItem label="Available" value={user.workerProfile.isAvailable ? 'Yes' : 'No'} />
                 <InfoItem label="Bio" value={user.workerProfile.bio || 'N/A'} />
+              </div>
+              <div className="flex gap-2 mt-3">
+                {user.workerProfile.verificationStatus !== 'VERIFIED' && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await verifyWorker(user.id, { status: 'VERIFIED' });
+                        onClose();
+                      } catch (err: any) {
+                        alert(err.message || 'Failed to verify');
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-medium hover:bg-green-100 transition-colors"
+                  >
+                    Verify Worker
+                  </button>
+                )}
+                {user.workerProfile.verificationStatus === 'VERIFIED' && (
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm('Revoke this worker\'s verification?')) return;
+                      try {
+                        await verifyWorker(user.id, { status: 'PENDING' });
+                        onClose();
+                      } catch (err: any) {
+                        alert(err.message || 'Failed to revoke');
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs font-medium hover:bg-red-100 transition-colors"
+                  >
+                    Revoke Verification
+                  </button>
+                )}
               </div>
             </div>
           )}

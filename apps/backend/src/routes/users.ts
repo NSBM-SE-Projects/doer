@@ -4,10 +4,10 @@ import prisma from '../config/prisma';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/AppError';
-import { upload } from '../middleware/upload';
-import { uploadToCloudinary } from '../config/cloudinary';
 import { recalculateAndNotifyBadge } from '../utils/badgeCalculator';
 import { createNotification } from './notifications';
+import { upload } from '../middleware/upload';
+import { uploadToCloudinary } from '../config/cloudinary';
 
 const router = Router();
 
@@ -56,7 +56,6 @@ router.get(
               orderBy: { createdAt: 'desc' },
               take: 20,
             },
-            qualificationDocs: true,
             portfolio: {
               include: { category: true },
               orderBy: { createdAt: 'desc' },
@@ -240,7 +239,6 @@ router.post(
       updateData.backgroundCheckUrl = await uploadToCloudinary(files.backgroundCheck[0].buffer, 'verification/background');
     }
 
-    // Upload qualifications
     if (files.qualifications?.length) {
       for (const file of files.qualifications) {
         const url = await uploadToCloudinary(file.buffer, 'verification/qualifications');
@@ -261,16 +259,14 @@ router.post(
     const profile = await prisma.workerProfile.update({
       where: { id: workerProfile.id },
       data: updateData,
-      include: {
-        qualificationDocs: true,
-      },
+      include: { qualificationDocs: true },
     });
 
     res.json({ profile });
   })
 );
 
-// GET /api/users/me/worker/verification — get verification status
+// GET /api/users/me/worker/verification — get worker's verification status and documents
 router.get(
   '/me/worker/verification',
   authenticate,
@@ -299,9 +295,13 @@ router.get(
       verificationStatus: worker.verificationStatus,
       badgeLevel: worker.badgeLevel,
       rejectionReason: worker.rejectionReason,
+      nicNumber: worker.nicNumber,
       nicFrontUrl: worker.nicFrontUrl,
       nicBackUrl: worker.nicBackUrl,
+      nicVerified: worker.nicVerified,
+      qualificationsVerified: worker.qualificationsVerified,
       backgroundCheckUrl: worker.backgroundCheckUrl,
+      backgroundCheckVerified: worker.backgroundCheckVerified,
       qualificationDocs: worker.qualificationDocs,
       nextBadge,
       nextBadgeHint: nextBadge ? nextBadgeInfo[nextBadge] : 'You have reached the highest level!',
@@ -309,47 +309,80 @@ router.get(
   })
 );
 
-// PATCH /api/users/:id/verify — admin verify/reject worker
+// PATCH /api/users/:id/verify — admin verify individual document types or overall status
 router.patch(
   '/:id/verify',
   authenticate,
   authorize('ADMIN'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { status, rejectionReason } = z.object({
-      status: z.enum(['VERIFIED', 'REJECTED']),
+    const body = z.object({
+      // Overall status (legacy support)
+      status: z.enum(['VERIFIED', 'REJECTED', 'PENDING']).optional(),
       rejectionReason: z.string().optional(),
+      // Granular verification flags
+      nicVerified: z.boolean().optional(),
+      qualificationsVerified: z.boolean().optional(),
+      backgroundCheckVerified: z.boolean().optional(),
     }).parse(req.body);
 
-    if (status === 'REJECTED' && !rejectionReason) {
-      throw AppError.badRequest('Rejection reason is required when rejecting');
+    const updateData: any = {};
+
+    // Granular flags
+    if (body.nicVerified !== undefined) updateData.nicVerified = body.nicVerified;
+    if (body.qualificationsVerified !== undefined) updateData.qualificationsVerified = body.qualificationsVerified;
+    if (body.backgroundCheckVerified !== undefined) updateData.backgroundCheckVerified = body.backgroundCheckVerified;
+
+    // Overall status
+    if (body.status) {
+      updateData.verificationStatus = body.status;
+      updateData.rejectionReason = body.status === 'REJECTED' ? (body.rejectionReason || null) : null;
+      // Reset all flags when setting to PENDING or REJECTED
+      if (body.status === 'PENDING' || body.status === 'REJECTED') {
+        updateData.nicVerified = false;
+        updateData.qualificationsVerified = false;
+        updateData.backgroundCheckVerified = false;
+      }
+    }
+
+    // Auto-set overall status to VERIFIED if any doc is verified
+    if (body.nicVerified === true || body.qualificationsVerified === true || body.backgroundCheckVerified === true) {
+      updateData.verificationStatus = 'VERIFIED';
+      updateData.rejectionReason = null;
+    }
+
+    // Auto-downgrade overall status if any doc is revoked
+    if (body.nicVerified === false || body.qualificationsVerified === false || body.backgroundCheckVerified === false) {
+      updateData.verificationStatus = 'PENDING';
+      updateData.rejectionReason = null;
     }
 
     const profile = await prisma.workerProfile.update({
       where: { userId: req.params.id as string },
-      data: {
-        verificationStatus: status,
-        rejectionReason: status === 'REJECTED' ? rejectionReason : null,
-      },
+      data: updateData,
       include: {
         user: { select: { id: true, name: true, email: true } },
-        qualificationDocs: { select: { id: true } },
       },
     });
 
-    // Notify the worker
-    if (status === 'VERIFIED') {
-      await createNotification(
-        profile.userId,
-        'Verification Approved',
-        'Your identity has been verified. Welcome aboard!'
-      );
-      // Recalculate badge after verification
-      await recalculateAndNotifyBadge(profile.id);
-    } else {
+    // Recalculate badge based on new verification state
+    await recalculateAndNotifyBadge(profile.id);
+
+    // Notify worker
+    if (body.status === 'REJECTED') {
       await createNotification(
         profile.userId,
         'Verification Rejected',
-        `Your verification was rejected: ${rejectionReason}`
+        body.rejectionReason ? `Reason: ${body.rejectionReason}` : 'Please re-submit your documents.'
+      );
+    } else if (body.nicVerified || body.qualificationsVerified || body.backgroundCheckVerified) {
+      const verified = [];
+      if (body.nicVerified) verified.push('NIC');
+      if (body.qualificationsVerified) verified.push('Qualifications');
+      if (body.backgroundCheckVerified) verified.push('Background Check');
+      await createNotification(
+        profile.userId,
+        'Document Verified',
+        `Your ${verified.join(', ')} ${verified.length > 1 ? 'have' : 'has'} been verified!`
       );
     }
 

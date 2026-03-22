@@ -14,7 +14,7 @@ app.use(helmet());
 app.use(
   cors({
     origin: process.env.NODE_ENV === 'production'
-      ? [/* add production frontend URLs here */]
+      ? [process.env.FRONTEND_URL || 'https://admin.doer.lk']
       : true,
     credentials: true,
   })

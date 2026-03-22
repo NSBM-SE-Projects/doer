@@ -10,7 +10,7 @@ export const getIO = (): Server | null => io;
 export const initSocket = (httpServer: HttpServer) => {
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.NODE_ENV === 'production' ? [] : '*',
+      origin: process.env.NODE_ENV === 'production' ? [process.env.FRONTEND_URL || 'https://admin.doer.lk'] : '*',
       credentials: true,
     },
   });
