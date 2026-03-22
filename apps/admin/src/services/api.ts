@@ -111,6 +111,16 @@ export const getPayments = (params: Record<string, string>) => {
   return request<any>(`/admin/payments?${qs}`);
 };
 
+// Payments - Admin Actions
+export const adminReleasePayment = (jobId: string) =>
+  request<any>(`/payments/${jobId}/release`, { method: 'POST' });
+
+export const adminRefundPayment = (jobId: string) =>
+  request<any>(`/payments/${jobId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'REFUNDED' }),
+  });
+
 // Jobs - Admin Actions
 export const adminCloseJob = (id: string) =>
   request<any>(`/admin/jobs/${id}/close`, { method: 'PATCH' });

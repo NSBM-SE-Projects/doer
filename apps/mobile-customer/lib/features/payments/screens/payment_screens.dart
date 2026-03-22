@@ -530,12 +530,13 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
 
   String _mapStatus(String? status) {
     switch (status?.toUpperCase()) {
-      case 'COMPLETED':
-        return 'Completed';
+      case 'RELEASED':
+        return 'Released';
       case 'HELD':
-      case 'ESCROW':
       case 'PENDING':
         return 'In Escrow';
+      case 'DISPUTED':
+        return 'Disputed';
       case 'REFUNDED':
         return 'Refunded';
       default:
@@ -545,12 +546,14 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
 
   Color _statusColor(String displayStatus) {
     switch (displayStatus) {
-      case 'Completed':
+      case 'Released':
         return AppColors.success;
       case 'In Escrow':
         return AppColors.warning;
-      case 'Refunded':
+      case 'Disputed':
         return AppColors.error;
+      case 'Refunded':
+        return Colors.purple;
       default:
         return AppColors.textSecondary;
     }
@@ -558,15 +561,15 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Calculate total from completed payments
+    // Calculate total from released payments
     num totalSpent = 0;
-    int completedCount = 0;
+    int releasedCount = 0;
     for (final p in _payments) {
       final status = _mapStatus(p['status']);
-      if (status == 'Completed') {
+      if (status == 'Released') {
         final price = p['amount'] ?? p['price'] ?? 0;
         totalSpent += price is num ? price : (num.tryParse(price.toString()) ?? 0);
-        completedCount++;
+        releasedCount++;
       }
     }
 
@@ -633,7 +636,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                               style: AppTypography.displayLarge
                                   .copyWith(color: Colors.white)),
                           const SizedBox(height: 4),
-                          Text('$completedCount completed transaction${completedCount == 1 ? '' : 's'}',
+                          Text('$releasedCount released transaction${releasedCount == 1 ? '' : 's'}',
                               style: AppTypography.labelSmall
                                   .copyWith(color: Colors.white.withValues(alpha: 0.7))),
                         ],
@@ -725,11 +728,13 @@ class _TransactionItem extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
-              status == 'Completed'
+              status == 'Released'
                   ? Icons.check_circle_outline_rounded
                   : status == 'Refunded'
                       ? Icons.replay_rounded
-                      : Icons.hourglass_top_rounded,
+                      : status == 'Disputed'
+                          ? Icons.gavel_rounded
+                          : Icons.hourglass_top_rounded,
               size: 20,
               color: statusColor,
             ),

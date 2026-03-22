@@ -1,14 +1,18 @@
 import { useEffect, useState, useCallback } from 'react';
-import { getPayments } from '../services/api';
+import { getPayments, adminReleasePayment, adminRefundPayment } from '../services/api';
 import {
   ChevronLeft,
   ChevronRight,
   CreditCard,
   DollarSign,
   Filter,
+  Clock,
+  AlertTriangle,
+  ArrowUpRight,
+  RotateCcw,
 } from 'lucide-react';
 
-const STATUS_OPTIONS = ['PENDING', 'COMPLETED', 'FAILED', 'REFUNDED'];
+const STATUS_OPTIONS = ['PENDING', 'HELD', 'RELEASED', 'DISPUTED', 'REFUNDED'];
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<any[]>([]);
@@ -41,12 +45,49 @@ export default function PaymentsPage() {
     fetchPayments();
   }, [fetchPayments]);
 
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   const totalPages = Math.ceil(total / limit);
+
+  // Count by status
+  const heldCount = payments.filter(p => p.status === 'HELD').length;
+  const disputedCount = payments.filter(p => p.status === 'DISPUTED').length;
+
+  const handleRelease = async (jobId: string) => {
+    if (!confirm('Release these held funds to the worker?')) return;
+    setActionLoading(jobId);
+    setActionMsg(null);
+    try {
+      await adminReleasePayment(jobId);
+      setActionMsg({ type: 'success', text: 'Funds released successfully' });
+      fetchPayments();
+    } catch (err: any) {
+      setActionMsg({ type: 'error', text: err.message || 'Failed to release' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRefund = async (jobId: string) => {
+    if (!confirm('Refund this payment to the customer?')) return;
+    setActionLoading(jobId);
+    setActionMsg(null);
+    try {
+      await adminRefundPayment(jobId);
+      setActionMsg({ type: 'success', text: 'Payment refunded successfully' });
+      fetchPayments();
+    } catch (err: any) {
+      setActionMsg({ type: 'error', text: err.message || 'Failed to refund' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   return (
     <div className="space-y-4">
       {/* Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-warm-300 p-5">
           <div className="flex items-center gap-2 text-warm-500 text-sm mb-1">
             <CreditCard size={16} />
@@ -57,7 +98,7 @@ export default function PaymentsPage() {
         <div className="bg-white rounded-xl border border-warm-300 p-5">
           <div className="flex items-center gap-2 text-warm-500 text-sm mb-1">
             <DollarSign size={16} />
-            Total Revenue
+            Total Released
           </div>
           <p className="text-2xl font-bold text-green-600">
             Rs. {totalRevenue.toLocaleString()}
@@ -65,16 +106,31 @@ export default function PaymentsPage() {
         </div>
         <div className="bg-white rounded-xl border border-warm-300 p-5">
           <div className="flex items-center gap-2 text-warm-500 text-sm mb-1">
-            <Filter size={16} />
-            Filter
+            <Clock size={16} />
+            Held in Escrow
           </div>
+          <p className="text-2xl font-bold text-orange-600">{heldCount}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-warm-300 p-5">
+          <div className="flex items-center gap-2 text-warm-500 text-sm mb-1">
+            <AlertTriangle size={16} />
+            Disputed
+          </div>
+          <p className="text-2xl font-bold text-red-600">{disputedCount}</p>
+        </div>
+      </div>
+
+      {/* Filter */}
+      <div className="bg-white rounded-xl border border-warm-300 p-4">
+        <div className="flex items-center gap-2">
+          <Filter size={16} className="text-warm-400" />
           <select
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value);
               setPage(1);
             }}
-            className="w-full px-3 py-2 border border-warm-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+            className="px-3 py-2 border border-warm-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
           >
             <option value="">All Statuses</option>
             {STATUS_OPTIONS.map((s) => (
@@ -85,6 +141,12 @@ export default function PaymentsPage() {
           </select>
         </div>
       </div>
+
+      {actionMsg && (
+        <div className={`p-3 rounded-lg text-sm ${actionMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          {actionMsg.text}
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-warm-300 overflow-hidden">
@@ -98,13 +160,13 @@ export default function PaymentsPage() {
               <thead>
                 <tr className="bg-warm-50 border-b border-warm-300">
                   <th className="text-left px-4 py-3 text-xs font-medium text-warm-500 uppercase">
-                    Payment ID
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-warm-500 uppercase">
                     Job
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-warm-500 uppercase">
                     Customer
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-warm-500 uppercase">
+                    Worker
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-warm-500 uppercase">
                     Amount
@@ -113,21 +175,27 @@ export default function PaymentsPage() {
                     Status
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-warm-500 uppercase">
+                    Held At
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-warm-500 uppercase">
                     Date
+                  </th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-warm-500 uppercase">
+                    Actions
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {payments.map((payment) => (
                   <tr key={payment.id} className="hover:bg-warm-50">
-                    <td className="px-4 py-3 text-sm text-warm-500 font-mono">
-                      {payment.id.slice(0, 8)}...
-                    </td>
                     <td className="px-4 py-3 text-sm text-warm-800">
                       {payment.job?.title || 'N/A'}
                     </td>
                     <td className="px-4 py-3 text-sm text-warm-700">
                       {payment.job?.customer?.user?.name || 'N/A'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-warm-700">
+                      {payment.job?.worker?.user?.name || '-'}
                     </td>
                     <td className="px-4 py-3 text-sm font-medium text-warm-800">
                       Rs. {payment.amount?.toLocaleString()}
@@ -136,14 +204,46 @@ export default function PaymentsPage() {
                       <PaymentStatusBadge status={payment.status} />
                     </td>
                     <td className="px-4 py-3 text-sm text-warm-500">
+                      {payment.heldAt
+                        ? new Date(payment.heldAt).toLocaleDateString()
+                        : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-warm-500">
                       {new Date(payment.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {(payment.status === 'HELD' || payment.status === 'DISPUTED') && (
+                          <button
+                            onClick={() => handleRelease(payment.job?.id || payment.jobId)}
+                            disabled={actionLoading === (payment.job?.id || payment.jobId)}
+                            title="Release to worker"
+                            className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-30"
+                          >
+                            <ArrowUpRight size={16} />
+                          </button>
+                        )}
+                        {(payment.status === 'HELD' || payment.status === 'DISPUTED') && (
+                          <button
+                            onClick={() => handleRefund(payment.job?.id || payment.jobId)}
+                            disabled={actionLoading === (payment.job?.id || payment.jobId)}
+                            title="Refund to customer"
+                            className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-30"
+                          >
+                            <RotateCcw size={16} />
+                          </button>
+                        )}
+                        {payment.status !== 'HELD' && payment.status !== 'DISPUTED' && (
+                          <span className="text-xs text-warm-400">—</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
                 {payments.length === 0 && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={8}
                       className="text-center py-8 text-sm text-warm-400"
                     >
                       No payments found
@@ -190,8 +290,9 @@ export default function PaymentsPage() {
 function PaymentStatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
     PENDING: 'bg-yellow-100 text-yellow-700',
-    COMPLETED: 'bg-green-100 text-green-700',
-    FAILED: 'bg-red-100 text-red-700',
+    HELD: 'bg-orange-100 text-orange-700',
+    RELEASED: 'bg-green-100 text-green-700',
+    DISPUTED: 'bg-red-100 text-red-700',
     REFUNDED: 'bg-purple-100 text-purple-700',
   };
   return (

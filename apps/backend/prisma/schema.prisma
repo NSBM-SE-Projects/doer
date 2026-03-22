@@ -53,6 +53,15 @@ enum BadgeLevel {
   PLATINUM
 }
 
+enum PaymentStatus {
+  PENDING
+  HELD
+  RELEASED
+  DISPUTED
+  REFUNDED
+  COMPLETED
+}
+
 model User {
   id                 String             @id @default(cuid())
   firebaseUid        String             @unique
@@ -236,14 +245,37 @@ model Message {
 }
 
 model Payment {
-  id            String   @id @default(cuid())
+  id            String        @id @default(cuid())
   amount        Float
-  status        String   @default("PENDING")
+  status        PaymentStatus @default(PENDING)
   payhereRef    String?
-  createdAt     DateTime @default(now())
+  heldAt        DateTime?
+  releasedAt    DateTime?
+  disputedAt    DateTime?
+  refundedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt @default(now())
 
-  jobId         String   @unique
-  job           Job      @relation(fields: [jobId], references: [id])
+  jobId         String        @unique
+  job           Job           @relation(fields: [jobId], references: [id])
+  dispute       Dispute?
+}
+
+model Dispute {
+  id               String   @id @default(cuid())
+  reason           String
+  description      String
+  customerEvidence String[]
+  workerResponse   String?
+  workerEvidence   String[]
+  resolution       String?
+  resolvedBy       String?
+  resolvedAt       DateTime?
+  createdAt        DateTime @default(now())
+
+  paymentId        String   @unique
+  payment          Payment  @relation(fields: [paymentId], references: [id])
+  raisedBy         String
 }
 
 model Notification {
