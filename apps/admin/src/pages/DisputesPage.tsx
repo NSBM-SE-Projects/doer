@@ -8,6 +8,7 @@ import {
   CheckCircle,
   ShieldCheck,
   DollarSign,
+  FileText,
 } from 'lucide-react';
 
 export default function DisputesPage() {
@@ -41,7 +42,7 @@ export default function DisputesPage() {
         <CheckCircle size={48} className="mx-auto text-green-400 mb-4" />
         <h3 className="text-lg font-semibold text-warm-800">No disputes</h3>
         <p className="text-sm text-warm-500 mt-1">
-          No cancelled jobs with assigned workers to review.
+          No active disputes to review.
         </p>
       </div>
     );
@@ -55,57 +56,63 @@ export default function DisputesPage() {
       </p>
 
       <div className="space-y-3">
-        {disputes.map((job) => (
-          <div
-            key={job.id}
-            className="bg-white rounded-xl border border-warm-300 p-5 hover:shadow-md transition-shadow cursor-pointer"
-            onClick={() => setSelectedDispute(job)}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h4 className="font-semibold text-warm-800">{job.title}</h4>
-                  <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
-                    CANCELLED
-                  </span>
+        {disputes.map((job) => {
+          const isEscrowDispute = job.payment?.status === 'DISPUTED';
+          return (
+            <div
+              key={job.id}
+              className="bg-white rounded-xl border border-warm-300 p-5 hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => setSelectedDispute(job)}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-semibold text-warm-800">{job.title}</h4>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        isEscrowDispute
+                          ? 'bg-orange-100 text-orange-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}
+                    >
+                      {isEscrowDispute ? 'ESCROW DISPUTE' : 'CANCELLED'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-warm-500 mt-1">
+                    {job.category?.name} &middot; {job.address || 'No address'}
+                  </p>
                 </div>
-                <p className="text-sm text-warm-500 mt-1">
-                  {job.category?.name} &middot; {job.address || 'No address'}
-                </p>
+                <div className="text-right">
+                  <p className="text-sm font-medium text-warm-800">
+                    {job.price ? `Rs. ${job.price.toLocaleString()}` : 'N/A'}
+                  </p>
+                  <p className="text-xs text-warm-400">
+                    {new Date(job.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-sm font-medium text-warm-800">
-                  {job.price ? `Rs. ${job.price.toLocaleString()}` : 'N/A'}
-                </p>
-                <p className="text-xs text-warm-400">
-                  {new Date(job.createdAt).toLocaleDateString()}
-                </p>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-6 mt-3 pt-3 border-t border-warm-200">
-              <div className="flex items-center gap-2 text-sm text-warm-600">
-                <User size={14} className="text-warm-400" />
-                <span>
-                  Customer: {job.customer?.user?.name || 'N/A'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-warm-600">
-                <User size={14} className="text-warm-400" />
-                <span>Worker: {job.worker?.user?.name || 'N/A'}</span>
-              </div>
-              {job._count?.messages > 0 && (
-                <div className="flex items-center gap-1 text-sm text-warm-500">
-                  <MessageSquare size={14} />
-                  {job._count.messages} messages
+              <div className="flex items-center gap-6 mt-3 pt-3 border-t border-warm-200">
+                <div className="flex items-center gap-2 text-sm text-warm-600">
+                  <User size={14} className="text-warm-400" />
+                  <span>Customer: {job.customer?.user?.name || 'N/A'}</span>
                 </div>
-              )}
+                <div className="flex items-center gap-2 text-sm text-warm-600">
+                  <User size={14} className="text-warm-400" />
+                  <span>Worker: {job.worker?.user?.name || 'N/A'}</span>
+                </div>
+                {job._count?.messages > 0 && (
+                  <div className="flex items-center gap-1 text-sm text-warm-500">
+                    <MessageSquare size={14} />
+                    {job._count.messages} messages
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Dispute Detail Modal */}
       {selectedDispute && (
         <DisputeDetailModal
           dispute={selectedDispute}
@@ -129,11 +136,16 @@ function DisputeDetailModal({
   onClose: () => void;
   onResolved: () => void;
 }) {
-  const [resolution, setResolution] = useState<'refund_customer' | 'pay_worker' | 'no_compensation'>('no_compensation');
+  const [resolution, setResolution] = useState<
+    'refund_customer' | 'pay_worker' | 'no_compensation'
+  >('no_compensation');
   const [notes, setNotes] = useState('');
   const [resolving, setResolving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const isEscrowDispute = dispute.payment?.status === 'DISPUTED';
+  const disputeRecord = dispute.payment?.dispute;
 
   const handleResolve = async () => {
     const labels: Record<string, string> = {
@@ -146,7 +158,10 @@ function DisputeDetailModal({
     setResolving(true);
     setError('');
     try {
-      await resolveDispute(dispute.id, { resolution, notes: notes || undefined });
+      await resolveDispute(dispute.id, {
+        resolution,
+        notes: notes || undefined,
+      });
       setSuccess('Dispute resolved successfully');
       setTimeout(onResolved, 1000);
     } catch (err: any) {
@@ -162,7 +177,7 @@ function DisputeDetailModal({
         <div className="p-6 border-b border-warm-300 flex items-center justify-between">
           <h3 className="font-semibold text-warm-800 flex items-center gap-2">
             <AlertTriangle size={18} className="text-orange-500" />
-            Dispute Details
+            {isEscrowDispute ? 'Escrow Dispute' : 'Cancellation Dispute'}
           </h3>
           <button
             onClick={onClose}
@@ -218,6 +233,90 @@ function DisputeDetailModal({
             </div>
           </div>
 
+          {/* Escrow Dispute Details */}
+          {isEscrowDispute && disputeRecord && (
+            <div className="border-t border-warm-300 pt-4">
+              <h5 className="font-medium text-warm-800 mb-3 flex items-center gap-2">
+                <FileText size={16} />
+                Dispute Details
+              </h5>
+              <div className="space-y-3">
+                <div className="p-3 bg-orange-50 rounded-lg">
+                  <p className="text-xs font-medium text-orange-700 mb-1">
+                    Reason
+                  </p>
+                  <p className="text-sm text-warm-800">
+                    {disputeRecord.reason}
+                  </p>
+                </div>
+                <div className="p-3 bg-warm-50 rounded-lg">
+                  <p className="text-xs font-medium text-warm-600 mb-1">
+                    Description
+                  </p>
+                  <p className="text-sm text-warm-800">
+                    {disputeRecord.description}
+                  </p>
+                </div>
+                {disputeRecord.customerEvidence?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-warm-600 mb-1">
+                      Customer Evidence ({disputeRecord.customerEvidence.length}{' '}
+                      file(s))
+                    </p>
+                    <div className="flex gap-2 flex-wrap">
+                      {disputeRecord.customerEvidence.map(
+                        (url: string, i: number) => (
+                          <a
+                            key={i}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-primary-600 underline"
+                          >
+                            Evidence {i + 1}
+                          </a>
+                        )
+                      )}
+                    </div>
+                  </div>
+                )}
+                {disputeRecord.workerResponse && (
+                  <div className="p-3 bg-blue-50 rounded-lg">
+                    <p className="text-xs font-medium text-blue-700 mb-1">
+                      Worker Response
+                    </p>
+                    <p className="text-sm text-warm-800">
+                      {disputeRecord.workerResponse}
+                    </p>
+                  </div>
+                )}
+                {disputeRecord.workerEvidence?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-warm-600 mb-1">
+                      Worker Evidence ({disputeRecord.workerEvidence.length}{' '}
+                      file(s))
+                    </p>
+                    <div className="flex gap-2 flex-wrap">
+                      {disputeRecord.workerEvidence.map(
+                        (url: string, i: number) => (
+                          <a
+                            key={i}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-primary-600 underline"
+                          >
+                            Evidence {i + 1}
+                          </a>
+                        )
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {dispute.payment && (
             <div className="border-t border-warm-300 pt-4">
               <h5 className="font-medium text-warm-800 mb-2 flex items-center gap-2">
@@ -232,10 +331,34 @@ function DisputeDetailModal({
                 </div>
                 <div>
                   <p className="text-xs text-warm-500">Status</p>
-                  <p className="text-sm font-medium text-warm-800">
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                      dispute.payment.status === 'DISPUTED'
+                        ? 'bg-red-100 text-red-700'
+                        : dispute.payment.status === 'HELD'
+                        ? 'bg-orange-100 text-orange-700'
+                        : 'bg-warm-100 text-warm-700'
+                    }`}
+                  >
                     {dispute.payment.status}
-                  </p>
+                  </span>
                 </div>
+                {dispute.payment.heldAt && (
+                  <div>
+                    <p className="text-xs text-warm-500">Held At</p>
+                    <p className="text-sm text-warm-800">
+                      {new Date(dispute.payment.heldAt).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+                {dispute.payment.disputedAt && (
+                  <div>
+                    <p className="text-xs text-warm-500">Disputed At</p>
+                    <p className="text-sm text-warm-800">
+                      {new Date(dispute.payment.disputedAt).toLocaleString()}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -273,10 +396,7 @@ function DisputeDetailModal({
               </h5>
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {dispute.messages.map((msg: any) => (
-                  <div
-                    key={msg.id}
-                    className="p-3 bg-warm-50 rounded-lg"
-                  >
+                  <div key={msg.id} className="p-3 bg-warm-50 rounded-lg">
                     <div className="flex items-center justify-between mb-1">
                       <p className="text-xs font-medium text-warm-700">
                         {msg.sender?.name || 'Unknown'}
@@ -311,8 +431,12 @@ function DisputeDetailModal({
                   className="accent-primary-600"
                 />
                 <div>
-                  <p className="text-sm font-medium text-warm-800">Refund Customer</p>
-                  <p className="text-xs text-warm-500">Issue a full refund to the customer for this job</p>
+                  <p className="text-sm font-medium text-warm-800">
+                    Refund Customer
+                  </p>
+                  <p className="text-xs text-warm-500">
+                    Issue a full refund to the customer
+                  </p>
                 </div>
               </label>
               <label className="flex items-center gap-3 p-3 border border-warm-200 rounded-lg cursor-pointer hover:bg-warm-50 transition-colors">
@@ -325,8 +449,12 @@ function DisputeDetailModal({
                   className="accent-primary-600"
                 />
                 <div>
-                  <p className="text-sm font-medium text-warm-800">Compensate Worker</p>
-                  <p className="text-xs text-warm-500">Pay the worker for work completed before cancellation</p>
+                  <p className="text-sm font-medium text-warm-800">
+                    Release to Worker
+                  </p>
+                  <p className="text-xs text-warm-500">
+                    Release the escrowed funds to the worker
+                  </p>
                 </div>
               </label>
               <label className="flex items-center gap-3 p-3 border border-warm-200 rounded-lg cursor-pointer hover:bg-warm-50 transition-colors">
@@ -339,8 +467,12 @@ function DisputeDetailModal({
                   className="accent-primary-600"
                 />
                 <div>
-                  <p className="text-sm font-medium text-warm-800">No Compensation</p>
-                  <p className="text-xs text-warm-500">Close the dispute without issuing any compensation</p>
+                  <p className="text-sm font-medium text-warm-800">
+                    No Compensation
+                  </p>
+                  <p className="text-xs text-warm-500">
+                    Close the dispute without any payout
+                  </p>
                 </div>
               </label>
             </div>
@@ -348,16 +480,20 @@ function DisputeDetailModal({
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add resolution notes (optional)..."
+              placeholder="Resolution notes (optional)..."
               rows={2}
               className="w-full px-3 py-2 border border-warm-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none mb-3"
             />
 
             {error && (
-              <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm mb-3">{error}</div>
+              <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm mb-3">
+                {error}
+              </div>
             )}
             {success && (
-              <div className="p-3 bg-green-50 text-green-700 rounded-lg text-sm mb-3">{success}</div>
+              <div className="p-3 bg-green-50 text-green-700 rounded-lg text-sm mb-3">
+                {success}
+              </div>
             )}
 
             <button

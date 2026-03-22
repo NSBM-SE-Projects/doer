@@ -40,9 +40,9 @@ router.get(
       prisma.job.groupBy({ by: ['status'], _count: { id: true } }),
       // Total payments count
       prisma.payment.count(),
-      // Total revenue (sum of COMPLETED payments)
+      // Total revenue (sum of RELEASED payments)
       prisma.payment.aggregate({
-        where: { status: 'COMPLETED' },
+        where: { status: 'RELEASED' },
         _sum: { amount: true },
       }),
       // Workers pending verification
@@ -69,7 +69,7 @@ router.get(
           TO_CHAR(DATE_TRUNC('month', "createdAt"), 'YYYY-MM') AS month,
           COALESCE(SUM(amount), 0)::float AS revenue
         FROM "Payment"
-        WHERE status = 'COMPLETED'
+        WHERE status = 'RELEASED'
           AND "createdAt" >= ${sixMonthsAgo}
         GROUP BY DATE_TRUNC('month', "createdAt")
         ORDER BY DATE_TRUNC('month', "createdAt") ASC
@@ -378,7 +378,7 @@ router.get(
 const listPaymentsQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
-  status: z.enum(['PENDING', 'COMPLETED', 'FAILED', 'REFUNDED']).optional(),
+  status: z.enum(['PENDING', 'HELD', 'RELEASED', 'DISPUTED', 'REFUNDED']).optional(),
 });
 
 router.get(
@@ -408,6 +408,7 @@ router.get(
               },
             },
           },
+          dispute: true,
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -415,7 +416,7 @@ router.get(
       }),
       prisma.payment.count({ where }),
       prisma.payment.aggregate({
-        where: { status: 'COMPLETED' },
+        where: { status: 'RELEASED' },
         _sum: { amount: true },
       }),
     ]);
@@ -480,6 +481,7 @@ router.patch(
 
 // ---------------------------------------------------------------------------
 // PATCH /admin/disputes/:id/resolve — Resolve a dispute with compensation
+// Accepts either a job ID (cancelled job) or payment ID (escrow dispute)
 // ---------------------------------------------------------------------------
 const resolveDisputeSchema = z.object({
   resolution: z.enum(['refund_customer', 'pay_worker', 'no_compensation']),
@@ -490,34 +492,79 @@ router.patch(
   '/disputes/:id/resolve',
   asyncHandler(async (req: AuthRequest, res: Response) => {
     const { resolution, notes } = resolveDisputeSchema.parse(req.body);
+    const id = req.params.id as string;
 
-    const job = await prisma.job.findUnique({
-      where: { id: req.params.id as string },
+    // Try to find as a payment dispute first (new escrow flow)
+    const disputeRecord = await prisma.dispute.findFirst({
+      where: { payment: { jobId: id } },
+      include: {
+        payment: {
+          include: {
+            job: {
+              include: {
+                customer: { include: { user: { select: { id: true, name: true } } } },
+                worker: { include: { user: { select: { id: true, name: true } } } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Fall back to job-level dispute (cancelled job with worker)
+    const job = disputeRecord?.payment.job ?? await prisma.job.findUnique({
+      where: { id },
       include: {
         customer: { include: { user: { select: { id: true, name: true } } } },
         worker: { include: { user: { select: { id: true, name: true } } } },
-        payment: true,
+        payment: { include: { dispute: true } },
       },
     });
     if (!job) throw AppError.notFound('Job not found');
-    if (job.status !== 'CANCELLED') throw AppError.badRequest('Only cancelled jobs can be resolved as disputes');
-    if (!job.workerId) throw AppError.badRequest('No worker was assigned to this job');
+
+    const payment = disputeRecord?.payment ?? (job as any).payment;
 
     // Update payment status based on resolution
-    if (job.payment) {
-      let paymentStatus = job.payment.status;
-      if (resolution === 'refund_customer') paymentStatus = 'REFUNDED';
-      else if (resolution === 'pay_worker') paymentStatus = 'COMPLETED';
+    if (payment) {
+      let newStatus: string = payment.status;
+      const timestamps: any = {};
+      if (resolution === 'refund_customer') {
+        newStatus = 'REFUNDED';
+        timestamps.refundedAt = new Date();
+      } else if (resolution === 'pay_worker') {
+        newStatus = 'RELEASED';
+        timestamps.releasedAt = new Date();
+      }
 
-      if (paymentStatus !== job.payment.status) {
+      if (newStatus !== payment.status) {
         await prisma.payment.update({
-          where: { id: job.payment.id },
-          data: { status: paymentStatus },
+          where: { id: payment.id },
+          data: { status: newStatus as any, ...timestamps },
         });
       }
     }
 
-    // Notify both parties about the resolution
+    // Mark dispute record as resolved
+    if (disputeRecord) {
+      await prisma.dispute.update({
+        where: { id: disputeRecord.id },
+        data: {
+          resolution: `${resolution}${notes ? ': ' + notes : ''}`,
+          resolvedBy: req.user!.userId,
+          resolvedAt: new Date(),
+        },
+      });
+    }
+
+    // Close the job if payment dispute is resolved
+    if (job.status !== 'CANCELLED' && job.status !== 'CLOSED') {
+      await prisma.job.update({
+        where: { id: job.id },
+        data: { status: 'CLOSED' },
+      });
+    }
+
+    // Notify both parties
     const { createNotification } = await import('./notifications');
     const resolutionText =
       resolution === 'refund_customer'
@@ -543,25 +590,18 @@ router.patch(
       message: 'Dispute resolved',
       resolution,
       notes,
-      job: await prisma.job.findUnique({
-        where: { id: job.id },
-        include: {
-          customer: { include: { user: { select: { id: true, name: true } } } },
-          worker: { include: { user: { select: { id: true, name: true } } } },
-          payment: true,
-        },
-      }),
     });
   })
 );
 
 // ---------------------------------------------------------------------------
-// GET /admin/disputes — List disputed/cancelled jobs
+// GET /admin/disputes — List disputed/cancelled jobs + escrow disputes
 // ---------------------------------------------------------------------------
 router.get(
   '/disputes',
   asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const disputes = await prisma.job.findMany({
+    // Get cancelled jobs with assigned workers
+    const cancelledJobs = await prisma.job.findMany({
       where: {
         status: 'CANCELLED',
         workerId: { not: null },
@@ -569,10 +609,10 @@ router.get(
       include: {
         category: true,
         customer: {
-          include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+          include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
         },
         worker: {
-          include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+          include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
         },
         review: true,
         messages: {
@@ -582,9 +622,44 @@ router.get(
             sender: { select: { id: true, name: true } },
           },
         },
-        payment: true,
+        payment: { include: { dispute: true } },
       },
       orderBy: { updatedAt: 'desc' },
+    });
+
+    // Get jobs with disputed payments (escrow disputes)
+    const disputedPaymentJobs = await prisma.job.findMany({
+      where: {
+        payment: { status: 'DISPUTED' },
+        status: { not: 'CANCELLED' },
+      },
+      include: {
+        category: true,
+        customer: {
+          include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+        },
+        worker: {
+          include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+        },
+        review: true,
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          include: {
+            sender: { select: { id: true, name: true } },
+          },
+        },
+        payment: { include: { dispute: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    // Merge and deduplicate by job ID
+    const seen = new Set<string>();
+    const disputes = [...disputedPaymentJobs, ...cancelledJobs].filter(j => {
+      if (seen.has(j.id)) return false;
+      seen.add(j.id);
+      return true;
     });
 
     res.json({ disputes });

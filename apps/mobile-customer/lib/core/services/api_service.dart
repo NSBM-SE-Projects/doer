@@ -304,6 +304,24 @@ class ApiService {
     return resp.data;
   }
 
+  Future<Map<String, dynamic>> releasePayment(String jobId) async {
+    final resp = await _dio.post('/payments/$jobId/release');
+    return resp.data;
+  }
+
+  Future<Map<String, dynamic>> raiseDispute(String jobId, {
+    required String reason,
+    required String description,
+    List<String>? evidence,
+  }) async {
+    final resp = await _dio.post('/payments/$jobId/dispute', data: {
+      'reason': reason,
+      'description': description,
+      if (evidence != null) 'evidence': evidence,
+    });
+    return resp.data;
+  }
+
   Future<List<dynamic>> getMyPayments() async {
     final resp = await _dio.get('/payments');
     return resp.data['payments'] as List;

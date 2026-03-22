@@ -448,7 +448,7 @@ router.post(
 
     // Check if payment is also done — if so, auto-close the job
     const payment = await prisma.payment.findUnique({ where: { jobId: job.id } });
-    const newStatus = payment?.status === 'COMPLETED' ? 'CLOSED' : 'REVIEWING';
+    const newStatus = payment?.status === 'RELEASED' ? 'CLOSED' : 'REVIEWING';
 
     await prisma.job.update({
       where: { id: req.params.id as string },
