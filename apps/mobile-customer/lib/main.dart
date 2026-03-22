@@ -65,8 +65,24 @@ class DoerCustomerApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       navigatorKey: navigatorKey,
+      builder: (context, child) {
+        return ScrollConfiguration(
+          behavior: const _NoOverscrollBehavior(),
+          child: child!,
+        );
+      },
       initialRoute: AppRoutes.splash,
       onGenerateRoute: generateRoute,
     );
+  }
+}
+
+class _NoOverscrollBehavior extends ScrollBehavior {
+  const _NoOverscrollBehavior();
+
+  @override
+  Widget buildOverscrollIndicator(
+      BuildContext context, Widget child, ScrollableDetails details) {
+    return child;
   }
 }
