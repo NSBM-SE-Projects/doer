@@ -108,6 +108,7 @@ model WorkerProfile {
   reviews            Review[]
   applications       JobApplication[]
   qualificationDocs  QualificationDoc[]
+  portfolio          PortfolioItem[]
 }
 
 model QualificationDoc {
@@ -126,6 +127,7 @@ model ServiceCategory {
   iconUrl     String?
 
   workers     WorkerCategory[]
+  portfolioItems PortfolioItem[]
   jobs        Job[]
 }
 
@@ -193,6 +195,7 @@ model Review {
   id         String          @id @default(cuid())
   rating     Int
   comment    String?
+  photoUrls  String[]
   createdAt  DateTime        @default(now())
 
   jobId      String          @unique
@@ -202,6 +205,19 @@ model Review {
   job        Job             @relation(fields: [jobId], references: [id])
   customer   CustomerProfile @relation(fields: [customerId], references: [id])
   worker     WorkerProfile   @relation(fields: [workerId], references: [id])
+}
+
+model PortfolioItem {
+  id          String           @id @default(cuid())
+  imageUrl    String
+  caption     String?
+  createdAt   DateTime         @default(now())
+
+  workerId    String
+  categoryId  String?
+
+  worker      WorkerProfile    @relation(fields: [workerId], references: [id])
+  category    ServiceCategory? @relation(fields: [categoryId], references: [id])
 }
 
 model Message {

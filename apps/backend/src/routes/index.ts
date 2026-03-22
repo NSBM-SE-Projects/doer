@@ -10,6 +10,7 @@ import paymentRoutes from './payments';
 import mapRoutes from './maps';
 import agoraRoutes from './agora';
 import uploadRoutes from './upload';
+import portfolioRoutes from './portfolio';
 import adminRoutes from './admin';
 
 const router = Router();
@@ -25,6 +26,7 @@ router.use('/payments', paymentRoutes);
 router.use('/maps', mapRoutes);
 router.use('/agora', agoraRoutes);
 router.use('/upload', uploadRoutes);
+router.use('/portfolio', portfolioRoutes);
 router.use('/admin', adminRoutes);
 
 export default router;

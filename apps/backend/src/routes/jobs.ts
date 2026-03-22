@@ -409,9 +409,10 @@ router.post(
   authenticate,
   authorize('CUSTOMER'),
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { rating, comment } = z.object({
+    const { rating, comment, photoUrls } = z.object({
       rating: z.number().int().min(1).max(5),
       comment: z.string().optional(),
+      photoUrls: z.array(z.string()).optional(),
     }).parse(req.body);
 
     const job = await prisma.job.findUnique({
@@ -430,6 +431,7 @@ router.post(
       data: {
         rating,
         comment,
+        photoUrls: photoUrls || [],
         jobId: job.id,
         customerId: job.customerId,
         workerId: job.workerId,
