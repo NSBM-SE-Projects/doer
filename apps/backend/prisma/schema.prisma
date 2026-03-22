@@ -129,6 +129,7 @@ model Job {
   address      String?
   scheduledAt  DateTime?
   scheduledEnd DateTime?
+  imageUrls    String[]
   completedAt  DateTime?
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt

@@ -110,6 +110,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return cat.isNotEmpty ? cat.first.icon : '🔧';
   }
 
+  String _formatBudget(Map<String, dynamic> job) {
+    final min = job['budgetMin'];
+    final max = job['budgetMax'];
+    final price = job['price'];
+    if (min != null && max != null) return 'Rs. ${min.toStringAsFixed(0)} — ${max.toStringAsFixed(0)}';
+    if (price != null) return 'Rs. ${price.toStringAsFixed(0)}';
+    return 'Negotiable';
+  }
+
+  String _formatDateTime(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final dt = DateTime.parse(dateStr).toLocal();
+      final months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+    } catch (_) { return ''; }
+  }
+
+  String _formatTime(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final dt = DateTime.parse(dateStr).toLocal();
+      final hour = dt.hour > 12 ? dt.hour - 12 : dt.hour;
+      final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+      return '${hour == 0 ? 12 : hour}:${dt.minute.toString().padLeft(2, '0')} $ampm';
+    } catch (_) { return ''; }
+  }
+
   JobDetailData _jobDetailFromMap(Map<String, dynamic> job) {
     final catName = job['category']?['name'] ?? '';
     return JobDetailData(
@@ -117,18 +145,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       title: job['title'] ?? '',
       category: catName,
       categoryIcon: _getCategoryIcon(catName),
-      budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : 'Negotiable',
-      distanceKm: _calcDistance((job['lat'] as num?)?.toDouble(), (job['lng'] as num?)?.toDouble()),
+      budget: _formatBudget(job),
+      distanceKm: _calcDistance((job['latitude'] as num?)?.toDouble(), (job['longitude'] as num?)?.toDouble()),
       postedAt: _timeAgo(job['createdAt']),
       clientName: job['customer']?['user']?['name'] ?? 'Customer',
       clientRating: (job['customer']?['user']?['customerProfile']?['rating'] ?? 0).toDouble(),
       clientJobsPosted: 0,
       description: job['description'] ?? '',
-      scheduledDate: job['scheduledDate'] ?? '',
+      scheduledDate: _formatDateTime(job['scheduledAt']),
+      scheduledTime: _formatTime(job['scheduledAt']),
+      urgency: job['urgency'],
       address: job['address'] ?? '',
       status: job['status'],
-      lat: (job['lat'] as num?)?.toDouble(),
-      lng: (job['lng'] as num?)?.toDouble(),
+      lat: (job['latitude'] as num?)?.toDouble(),
+      lng: (job['longitude'] as num?)?.toDouble(),
     );
   }
 
@@ -375,12 +405,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 title: job['title'] ?? '',
                                 category: catName,
                                 categoryIcon: _getCategoryIcon(catName),
-                                budget: job['price'] != null
-                                    ? 'Rs. ${job['price'].toStringAsFixed(0)}'
-                                    : 'Negotiable',
+                                budget: _formatBudget(job),
                                 location: job['address'] ?? '',
-                                distance: _calcDistance((job['lat'] as num?)?.toDouble(), (job['lng'] as num?)?.toDouble()),
+                                distance: _calcDistance((job['latitude'] as num?)?.toDouble(), (job['longitude'] as num?)?.toDouble()),
                                 postedAt: _timeAgo(job['createdAt']),
+                                lat: (job['latitude'] as num?)?.toDouble(),
+                                lng: (job['longitude'] as num?)?.toDouble(),
                                 onTap: () {
                                   Navigator.pushNamed(
                                     context,

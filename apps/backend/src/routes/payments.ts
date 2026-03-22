@@ -34,10 +34,11 @@ router.post(
       },
     });
 
-    // Update job status to REVIEWING
+    // Check if review already exists — if so, auto-close; otherwise REVIEWING
+    const review = await prisma.review.findUnique({ where: { jobId } });
     await prisma.job.update({
       where: { id: jobId },
-      data: { status: 'REVIEWING' },
+      data: { status: review ? 'CLOSED' : 'REVIEWING' },
     });
 
     // Notify the worker that payment has been released
