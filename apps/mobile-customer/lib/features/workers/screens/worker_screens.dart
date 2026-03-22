@@ -156,9 +156,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     final categories = (w['categories'] as List<dynamic>?) ?? [];
     final reviews = (w['reviews'] as List<dynamic>?) ?? [];
 
-    final badge = _badgeFromVerification(verificationStatus);
+    final isVerified = verificationStatus == 'VERIFIED';
+    final badge = isVerified ? BadgeLevel.bronze : BadgeLevel.trainee;
     final badgeColor = _badgeColor(badge);
-    final badgeLabel = '${BadgeLevel.label(badge)} Verified Worker';
+    final badgeLabel = isVerified ? 'Verified Worker' : 'Unverified';
 
     final categoryNames = categories
         .map((c) {
@@ -394,32 +395,56 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                   const SizedBox(height: 24),
 
                   // ── 6. Portfolio ──
-                  SectionHeader(
-                      title: 'Portfolio',
-                      actionText: 'See all',
-                      onAction: () {}),
-                  SizedBox(
-                    height: 120,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: 5,
-                      separatorBuilder: (_, __) =>
-                          const SizedBox(width: 10),
-                      itemBuilder: (_, i) => Container(
-                        width: 120,
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceVariant,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Center(
-                          child: Icon(Icons.image_outlined,
-                              color:
-                                  AppColors.textTertiary.withValues(alpha: 0.4),
-                              size: 32),
-                        ),
+                  if ((w['portfolio'] as List?)?.isNotEmpty ?? false) ...[
+                    SectionHeader(
+                        title: 'Portfolio (${(w['portfolio'] as List).length})',
+                        actionText: null,
+                        onAction: () {}),
+                    SizedBox(
+                      height: 120,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: (w['portfolio'] as List).length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(width: 10),
+                        itemBuilder: (_, i) {
+                          final item = (w['portfolio'] as List)[i];
+                          return GestureDetector(
+                            onTap: () => Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => Scaffold(
+                                backgroundColor: Colors.black,
+                                appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white),
+                                body: Column(
+                                  children: [
+                                    Expanded(child: Center(child: InteractiveViewer(child: Image.network(item['imageUrl'], fit: BoxFit.contain)))),
+                                    if (item['caption'] != null && item['caption'].toString().isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Text(item['caption'], style: const TextStyle(color: Colors.white)),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            )),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                item['imageUrl'],
+                                width: 120,
+                                height: 120,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  width: 120,
+                                  color: AppColors.surfaceVariant,
+                                  child: const Icon(Icons.broken_image_outlined, color: AppColors.textTertiary),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
-                  ),
+                  ],
 
                   const SizedBox(height: 24),
 
@@ -447,6 +472,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                       final comment = (review['comment'] as String?) ?? '';
                       final createdAt = review['createdAt'] as String?;
 
+                      final reviewPhotos = (review['photoUrls'] as List?)?.cast<String>() ?? [];
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: _ReviewCard(
@@ -454,6 +480,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                           rating: reviewRating,
                           date: _formatDate(createdAt),
                           text: comment,
+                          photoUrls: reviewPhotos,
                         ),
                       );
                     }),
@@ -520,12 +547,14 @@ class _ReviewCard extends StatelessWidget {
   final int rating;
   final String date;
   final String text;
+  final List<String> photoUrls;
 
   const _ReviewCard({
     required this.name,
     required this.rating,
     required this.date,
     required this.text,
+    this.photoUrls = const [],
   });
 
   @override
@@ -545,7 +574,7 @@ class _ReviewCard extends StatelessWidget {
               CircleAvatar(
                 radius: 16,
                 backgroundColor: AppColors.surfaceVariant,
-                child: Text(name[0],
+                child: Text(name.isNotEmpty ? name[0] : '?',
                     style: AppTypography.labelMedium
                         .copyWith(color: AppColors.primary)),
               ),
@@ -567,6 +596,30 @@ class _ReviewCard extends StatelessWidget {
             Text(text,
                 style: AppTypography.bodySmall
                     .copyWith(color: AppColors.textSecondary, height: 1.5)),
+          ],
+          if (photoUrls.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 70,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: photoUrls.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 6),
+                itemBuilder: (_, i) => GestureDetector(
+                  onTap: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => Scaffold(
+                      backgroundColor: Colors.black,
+                      appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white),
+                      body: Center(child: InteractiveViewer(child: Image.network(photoUrls[i], fit: BoxFit.contain))),
+                    ),
+                  )),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(photoUrls[i], width: 70, height: 70, fit: BoxFit.cover),
+                  ),
+                ),
+              ),
+            ),
           ],
         ],
       ),
