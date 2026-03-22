@@ -1,38 +1,34 @@
-import { BadgeLevel, VerificationStatus } from '@prisma/client';
+import { BadgeLevel } from '@prisma/client';
 import prisma from '../config/prisma';
 import { createNotification } from '../routes/notifications';
 
 interface WorkerForBadge {
   id: string;
   userId: string;
-  verificationStatus: VerificationStatus;
-  backgroundCheckUrl: string | null;
+  nicVerified: boolean;
+  qualificationsVerified: boolean;
+  backgroundCheckVerified: boolean;
   rating: number;
   totalJobs: number;
   badgeLevel: BadgeLevel;
-  qualificationDocs: { id: string }[];
 }
 
 export function calculateBadgeLevel(worker: WorkerForBadge): BadgeLevel {
-  const isVerified = worker.verificationStatus === 'VERIFIED';
-  const hasQualifications = worker.qualificationDocs.length > 0;
-  const hasBackgroundCheck = !!worker.backgroundCheckUrl;
-
-  // Platinum: Full verification + background check + 50+ jobs + 4.5+ rating
+  // Platinum: All 3 verified + background check + 50+ jobs + 4.5+ rating
   if (
-    isVerified &&
-    hasQualifications &&
-    hasBackgroundCheck &&
+    worker.nicVerified &&
+    worker.qualificationsVerified &&
+    worker.backgroundCheckVerified &&
     worker.totalJobs >= 50 &&
     worker.rating >= 4.5
   ) {
     return BadgeLevel.PLATINUM;
   }
 
-  // Gold: Full verification + 10+ jobs + 4.0+ rating
+  // Gold: NIC + qualifications verified + 10+ jobs + 4.0+ rating
   if (
-    isVerified &&
-    hasQualifications &&
+    worker.nicVerified &&
+    worker.qualificationsVerified &&
     worker.totalJobs >= 10 &&
     worker.rating >= 4.0
   ) {
@@ -40,12 +36,12 @@ export function calculateBadgeLevel(worker: WorkerForBadge): BadgeLevel {
   }
 
   // Silver: NIC + qualifications verified
-  if (isVerified && hasQualifications) {
+  if (worker.nicVerified && worker.qualificationsVerified) {
     return BadgeLevel.SILVER;
   }
 
   // Bronze: NIC verified
-  if (isVerified) {
+  if (worker.nicVerified) {
     return BadgeLevel.BRONZE;
   }
 
@@ -63,7 +59,6 @@ const BADGE_LABELS: Record<BadgeLevel, string> = {
 export async function recalculateAndNotifyBadge(workerId: string): Promise<BadgeLevel> {
   const worker = await prisma.workerProfile.findUnique({
     where: { id: workerId },
-    include: { qualificationDocs: { select: { id: true } } },
   });
 
   if (!worker) return BadgeLevel.TRAINEE;
@@ -71,16 +66,21 @@ export async function recalculateAndNotifyBadge(workerId: string): Promise<Badge
   const newLevel = calculateBadgeLevel(worker);
 
   if (newLevel !== worker.badgeLevel) {
+    const oldLevel = worker.badgeLevel;
     await prisma.workerProfile.update({
       where: { id: workerId },
       data: { badgeLevel: newLevel },
     });
 
-    await createNotification(
-      worker.userId,
-      'Badge Level Up!',
-      `Congratulations! You've reached ${BADGE_LABELS[newLevel]} level.`
-    );
+    // Only notify on level up, not down
+    const levels = [BadgeLevel.TRAINEE, BadgeLevel.BRONZE, BadgeLevel.SILVER, BadgeLevel.GOLD, BadgeLevel.PLATINUM];
+    if (levels.indexOf(newLevel) > levels.indexOf(oldLevel)) {
+      await createNotification(
+        worker.userId,
+        'Badge Level Up!',
+        `Congratulations! You've reached ${BADGE_LABELS[newLevel]} level.`
+      );
+    }
   }
 
   return newLevel;

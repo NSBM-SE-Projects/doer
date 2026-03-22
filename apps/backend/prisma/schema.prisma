@@ -53,6 +53,23 @@ enum BadgeLevel {
   PLATINUM
 }
 
+enum PaymentStatus {
+  PENDING
+  HELD
+  RELEASED
+  DISPUTED
+  REFUNDED
+  COMPLETED
+}
+
+enum MatchStatus {
+  PENDING
+  NOTIFIED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
 model User {
   id                 String             @id @default(cuid())
   firebaseUid        String             @unique
@@ -86,21 +103,25 @@ model CustomerProfile {
 }
 
 model WorkerProfile {
-  id                 String             @id @default(cuid())
-  userId             String             @unique
-  bio                String?
-  latitude           Float?
-  longitude          Float?
-  nicNumber          String?
-  nicFrontUrl        String?
-  nicBackUrl         String?
-  backgroundCheckUrl String?
-  badgeLevel         BadgeLevel         @default(TRAINEE)
-  rejectionReason    String?
-  verificationStatus VerificationStatus @default(NOT_SUBMITTED)
-  isAvailable        Boolean            @default(true)
-  rating             Float              @default(0)
-  totalJobs          Int                @default(0)
+  id                      String             @id @default(cuid())
+  userId                  String             @unique
+  bio                     String?
+  latitude                Float?
+  longitude               Float?
+  nicNumber               String?
+  nicFrontUrl             String?
+  nicBackUrl              String?
+  nicVerified             Boolean            @default(false)
+  qualificationsVerified  Boolean            @default(false)
+  backgroundCheckUrl      String?
+  backgroundCheckVerified Boolean            @default(false)
+  badgeLevel              BadgeLevel         @default(TRAINEE)
+  rejectionReason         String?
+  verificationStatus      VerificationStatus @default(NOT_SUBMITTED)
+  isAvailable             Boolean            @default(true)
+  rating                  Float              @default(0)
+  totalJobs               Int                @default(0)
+  completionRate          Float              @default(0)
 
   user               User               @relation(fields: [userId], references: [id])
   categories         WorkerCategory[]
@@ -109,6 +130,7 @@ model WorkerProfile {
   applications       JobApplication[]
   qualificationDocs  QualificationDoc[]
   portfolio          PortfolioItem[]
+  jobMatches         JobMatch[]
 }
 
 model QualificationDoc {
@@ -126,9 +148,9 @@ model ServiceCategory {
   description String?
   iconUrl     String?
 
-  workers     WorkerCategory[]
+  workers        WorkerCategory[]
   portfolioItems PortfolioItem[]
-  jobs        Job[]
+  jobs           Job[]
 }
 
 model WorkerCategory {
@@ -172,6 +194,7 @@ model Job {
   review        Review?
   payment       Payment?
   applications  JobApplication[]
+  jobMatches    JobMatch[]
 }
 
 model JobApplication {
@@ -233,14 +256,53 @@ model Message {
 }
 
 model Payment {
-  id            String   @id @default(cuid())
+  id            String        @id @default(cuid())
   amount        Float
-  status        String   @default("PENDING")
+  status        PaymentStatus @default(PENDING)
   payhereRef    String?
-  createdAt     DateTime @default(now())
+  heldAt        DateTime?
+  releasedAt    DateTime?
+  disputedAt    DateTime?
+  refundedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt @default(now())
 
-  jobId         String   @unique
-  job           Job      @relation(fields: [jobId], references: [id])
+  jobId         String        @unique
+  job           Job           @relation(fields: [jobId], references: [id])
+  dispute       Dispute?
+}
+
+model Dispute {
+  id               String   @id @default(cuid())
+  reason           String
+  description      String
+  customerEvidence String[]
+  workerResponse   String?
+  workerEvidence   String[]
+  resolution       String?
+  resolvedBy       String?
+  resolvedAt       DateTime?
+  createdAt        DateTime @default(now())
+
+  paymentId        String   @unique
+  payment          Payment  @relation(fields: [paymentId], references: [id])
+  raisedBy         String
+}
+
+model JobMatch {
+  id          String      @id @default(cuid())
+  matchScore  Float
+  distanceKm  Float
+  status      MatchStatus @default(PENDING)
+  createdAt   DateTime    @default(now())
+
+  jobId       String
+  workerId    String
+
+  job         Job           @relation(fields: [jobId], references: [id])
+  worker      WorkerProfile @relation(fields: [workerId], references: [id])
+
+  @@unique([jobId, workerId])
 }
 
 model Notification {

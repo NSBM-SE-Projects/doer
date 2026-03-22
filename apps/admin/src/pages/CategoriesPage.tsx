@@ -91,19 +91,27 @@ export default function CategoriesPage() {
     setShowForm(true);
   };
 
+  const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const showAlert = (type: 'success' | 'error', message: string) => {
+    setAlert({ type, message });
+    setTimeout(() => setAlert(null), 3000);
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setFormLoading(true);
     try {
       if (editingId) {
         await updateCategory(editingId, formData);
+        showAlert('success', 'Category updated');
       } else {
         await createCategory(formData);
+        showAlert('success', 'Category created');
       }
       setShowForm(false);
       fetchCategories();
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      showAlert('error', err.message || 'Failed to save category');
     } finally {
       setFormLoading(false);
     }
@@ -113,9 +121,10 @@ export default function CategoriesPage() {
     if (!confirm('Are you sure you want to delete this category?')) return;
     try {
       await deleteCategory(id);
+      showAlert('success', 'Category deleted');
       fetchCategories();
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      showAlert('error', err.message || 'Failed to delete category');
     }
   };
 

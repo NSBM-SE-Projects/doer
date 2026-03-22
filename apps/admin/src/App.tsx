@@ -9,6 +9,7 @@ import JobsPage from './pages/JobsPage';
 import CategoriesPage from './pages/CategoriesPage';
 import PaymentsPage from './pages/PaymentsPage';
 import DisputesPage from './pages/DisputesPage';
+import MatchingDemoPage from './pages/MatchingDemoPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -56,6 +57,7 @@ function AppRoutes() {
         <Route path="/categories" element={<CategoriesPage />} />
         <Route path="/payments" element={<PaymentsPage />} />
         <Route path="/disputes" element={<DisputesPage />} />
+        <Route path="/matching" element={<MatchingDemoPage />} />
       </Route>
     </Routes>
   );
