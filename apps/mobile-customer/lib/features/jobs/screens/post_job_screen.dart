@@ -7,6 +7,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/services/api_service.dart';
 import 'location_picker_screen.dart';
+import 'recommended_workers_screen.dart';
 
 class PostJobScreen extends StatefulWidget {
   const PostJobScreen({super.key});
@@ -212,7 +213,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
         }
       }
 
-      await ApiService().createJob(
+      final result = await ApiService().createJob(
         title: _titleController.text.trim(),
         description: _descController.text.trim(),
         categoryId: catId,
@@ -227,9 +228,21 @@ class _PostJobScreenState extends State<PostJobScreen> {
         imageUrls: imageUrls,
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Job posted successfully!'), backgroundColor: AppColors.success));
-        Navigator.pop(context);
+        final jobData = result['job'];
+        final matches = result['matches'] as List? ?? [];
+        final jobId = jobData?['id'] ?? '';
+        final jobTitle = jobData?['title'] ?? _titleController.text.trim();
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => RecommendedWorkersScreen(
+              jobId: jobId,
+              jobTitle: jobTitle,
+              initialMatches: matches,
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) _showError(ApiService.errorMessage(e));

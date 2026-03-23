@@ -7,8 +7,41 @@ import { AppError } from '../utils/AppError';
 import { createNotification } from './notifications';
 import { getIO } from '../sockets';
 import { geocode } from '../config/maps';
+import { matchWorkersForJob } from '../services/matching.service';
+import { estimateJobDuration, recordActualDuration } from '../services/estimation.service';
 
 const router = Router();
+
+// Recalculate completionRate and badgeLevel for a worker
+async function recalculateWorkerStats(workerId: string) {
+  const worker = await prisma.workerProfile.findUnique({
+    where: { id: workerId },
+  });
+  if (!worker) return;
+
+  // completionRate = completed jobs / all jobs currently assigned to this worker
+  const [completedCount, totalAssigned] = await Promise.all([
+    prisma.job.count({
+      where: { workerId, status: { in: ['COMPLETED', 'REVIEWING', 'CLOSED'] } },
+    }),
+    prisma.job.count({ where: { workerId } }),
+  ]);
+  const completionRate = totalAssigned > 0 ? completedCount / totalAssigned : 0;
+
+  // Badge calculation
+  const isVerified = worker.verificationStatus === 'VERIFIED';
+  const { totalJobs, rating } = worker;
+  let badgeLevel: 'TRAINEE' | 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' = 'TRAINEE';
+  if (isVerified && totalJobs >= 100) badgeLevel = 'PLATINUM';
+  else if (isVerified && totalJobs >= 50 && rating >= 4.0) badgeLevel = 'GOLD';
+  else if (isVerified && totalJobs >= 20) badgeLevel = 'SILVER';
+  else if (isVerified || totalJobs >= 5) badgeLevel = 'BRONZE';
+
+  await prisma.workerProfile.update({
+    where: { id: workerId },
+    data: { completionRate, badgeLevel },
+  });
+}
 
 const createJobSchema = z.object({
   title: z.string().min(1),
@@ -92,7 +125,38 @@ router.post(
       },
     });
 
-    res.status(201).json({ job });
+    // Auto-trigger matching if job has location
+    let matches: any[] = [];
+    if (job.latitude != null && job.longitude != null) {
+      try {
+        await matchWorkersForJob(job.id);
+        // Re-fetch with full worker details
+        matches = await prisma.jobMatch.findMany({
+          where: { jobId: job.id },
+          include: {
+            worker: {
+              include: {
+                user: { select: { id: true, name: true, avatarUrl: true, phone: true } },
+                categories: { include: { category: true } },
+              },
+            },
+          },
+          orderBy: { matchScore: 'desc' },
+        });
+      } catch (_) {
+        // Matching is best-effort — don't fail job creation
+      }
+    }
+
+    // Auto-estimate duration
+    let durationEstimate = null;
+    try {
+      durationEstimate = await estimateJobDuration(job.id);
+    } catch (_) {
+      // Estimation is best-effort — don't fail job creation
+    }
+
+    res.status(201).json({ job, matches, durationEstimate });
   })
 );
 
@@ -334,11 +398,19 @@ router.patch(
       data: { status: 'COMPLETED', completedAt: new Date() },
     });
 
-    // Increment worker's totalJobs
+    // Increment worker's totalJobs, then recalculate stats
     await prisma.workerProfile.update({
       where: { id: job.workerId! },
       data: { totalJobs: { increment: 1 } },
     });
+    await recalculateWorkerStats(job.workerId!);
+
+    // Record actual duration for the estimation learning pipeline
+    try {
+      await recordActualDuration(job.id);
+    } catch (_) {
+      // Non-critical — don't fail job completion
+    }
 
     // Notify customer
     const cp = await prisma.customerProfile.findUnique({ where: { id: job.customerId } });
@@ -373,6 +445,8 @@ router.patch(
       throw AppError.badRequest('Job is already ' + job.status.toLowerCase());
     }
 
+    const cancelledWorkerId = job.workerId;
+
     const updated = await prisma.job.update({
       where: { id: req.params.id as string },
       data: {
@@ -381,6 +455,11 @@ router.patch(
         ...(isWorker ? { workerId: null } : {}),
       },
     });
+
+    // Recalculate stats for the worker who was assigned
+    if (cancelledWorkerId) {
+      await recalculateWorkerStats(cancelledWorkerId);
+    }
 
     // Notify the other party
     if (isCustomer && job.worker) {
@@ -436,7 +515,7 @@ router.post(
       },
     });
 
-    // Update worker's average rating
+    // Update worker's average rating, then recalculate badge
     const avgResult = await prisma.review.aggregate({
       where: { workerId: job.workerId },
       _avg: { rating: true },
@@ -445,10 +524,11 @@ router.post(
       where: { id: job.workerId },
       data: { rating: avgResult._avg.rating || 0 },
     });
+    await recalculateWorkerStats(job.workerId);
 
     // Check if payment is also done — if so, auto-close the job
     const payment = await prisma.payment.findUnique({ where: { jobId: job.id } });
-    const newStatus = payment?.status === 'COMPLETED' ? 'CLOSED' : 'REVIEWING';
+    const newStatus = payment?.status === 'RELEASED' ? 'CLOSED' : 'REVIEWING';
 
     await prisma.job.update({
       where: { id: req.params.id as string },

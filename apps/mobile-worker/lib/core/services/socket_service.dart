@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:geolocator/geolocator.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,6 +15,7 @@ class SocketService {
   );
 
   io.Socket? _socket;
+  Timer? _locationTimer;
   bool get isConnected => _socket?.connected ?? false;
 
   // Callbacks
@@ -41,7 +44,12 @@ class SocketService {
           .build(),
     );
 
-    _socket!.onConnect((_) => print('Socket connected: ${_socket!.id}'));
+    _socket!.onConnect((_) {
+      print('Socket connected: ${_socket!.id}');
+      // Send location immediately on connect, then every 5 minutes
+      _sendLocation();
+      _startLocationUpdates();
+    });
 
     _socket!.on('new_message', (data) => onNewMessage?.call(data));
     _socket!.on('new_notification', (data) => onNewNotification?.call(data));
@@ -50,7 +58,10 @@ class SocketService {
     _socket!.on('call_ended', (data) => onCallEnded?.call(data));
     _socket!.on('call_declined', (data) => onCallDeclined?.call(data));
 
-    _socket!.onDisconnect((_) => print('Socket disconnected'));
+    _socket!.onDisconnect((_) {
+      print('Socket disconnected');
+      _stopLocationUpdates();
+    });
     _socket!.onConnectError((err) => print('Socket connection error: $err'));
   }
 
@@ -74,7 +85,54 @@ class SocketService {
     _socket?.emit('call_decline', {'targetUserId': targetUserId});
   }
 
+  // --- Location updates for matching algorithm ---
+
+  void _startLocationUpdates() {
+    _locationTimer?.cancel();
+    _locationTimer = Timer.periodic(
+      const Duration(minutes: 5),
+      (_) => _sendLocation(),
+    );
+  }
+
+  void _stopLocationUpdates() {
+    _locationTimer?.cancel();
+    _locationTimer = null;
+  }
+
+  Future<void> _sendLocation() async {
+    try {
+      // Check if location services are enabled
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      // Check / request permission
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+      if (permission == LocationPermission.deniedForever) return;
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+
+      _socket?.emit('location_update', {
+        'lat': position.latitude,
+        'lng': position.longitude,
+      });
+      print('Location sent: ${position.latitude}, ${position.longitude}');
+    } catch (e) {
+      print('Location update failed: $e');
+    }
+  }
+
   void disconnect() {
+    _stopLocationUpdates();
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;

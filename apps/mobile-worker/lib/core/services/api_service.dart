@@ -346,6 +346,22 @@ class ApiService {
     return resp.data['payments'] as List;
   }
 
+  Future<Map<String, dynamic>> getEarnings() async {
+    final resp = await _dio.get('/payments/earnings');
+    return resp.data;
+  }
+
+  Future<Map<String, dynamic>> respondToDispute(String jobId, {
+    required String response,
+    List<String>? evidence,
+  }) async {
+    final resp = await _dio.post('/payments/$jobId/dispute/respond', data: {
+      'response': response,
+      if (evidence != null) 'evidence': evidence,
+    });
+    return resp.data;
+  }
+
   // ════════════════════════════════════════════════════════════
   // APPLICATIONS
   // ════════════════════════════════════════════════════════════

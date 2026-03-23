@@ -280,6 +280,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     switch (status) {
       case 'HELD': return 'Held in escrow';
       case 'RELEASED': return 'Released';
+      case 'DISPUTED': return 'Disputed';
       case 'REFUNDED': return 'Refunded';
       case 'PENDING': return 'Pending';
       default: return status.isNotEmpty ? status : 'N/A';
@@ -290,7 +291,8 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     switch (status) {
       case 'Held in escrow': return AppColors.warning;
       case 'Released': return AppColors.success;
-      case 'Refunded': return AppColors.error;
+      case 'Disputed': return AppColors.error;
+      case 'Refunded': return Colors.purple;
       default: return AppColors.textTertiary;
     }
   }
@@ -299,8 +301,91 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     switch (status) {
       case 'Held in escrow': return AppColors.warningLight;
       case 'Released': return AppColors.successLight;
+      case 'Disputed': return AppColors.errorLight;
       case 'Refunded': return AppColors.errorLight;
       default: return AppColors.surfaceVariant;
+    }
+  }
+
+  Future<void> _raiseDispute() async {
+    String? reason;
+    String? description;
+    final reasons = ['Poor quality', 'Incomplete work', 'Property damage', 'No show', 'Other'];
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (ctx) {
+        String selectedReason = reasons.first;
+        final descController = TextEditingController();
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            title: const Text('Raise Dispute'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Why are you raising a dispute?'),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedReason,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    items: reasons.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                    onChanged: (v) => setDialogState(() => selectedReason = v!),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      hintText: 'Describe the issue...',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              TextButton(
+                onPressed: () {
+                  if (descController.text.trim().isEmpty) return;
+                  Navigator.pop(ctx, {
+                    'reason': selectedReason,
+                    'description': descController.text.trim(),
+                  });
+                },
+                style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                child: const Text('Submit Dispute'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (result == null || !mounted) return;
+    reason = result['reason'];
+    description = result['description'];
+
+    setState(() => _actionLoading = true);
+    try {
+      await ApiService().raiseDispute(widget.jobId, reason: reason!, description: description!);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Dispute submitted. An admin will review it.'), backgroundColor: AppColors.warning),
+      );
+      _fetchJob();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ApiService.errorMessage(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _actionLoading = false);
     }
   }
 
@@ -776,10 +861,12 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     final isCompletedOrReviewing = status == 'COMPLETED' || status == 'REVIEWING';
     final hasPayment = _job?['payment'] != null;
     final hasReview = _job?['review'] != null;
+    final paymentStatus = _job?['payment']?['status']?.toString().toUpperCase() ?? '';
     final canPay = isCompletedOrReviewing && !hasPayment;
     final canReview = isCompletedOrReviewing && !hasReview;
+    final canDispute = paymentStatus == 'HELD';
 
-    if (!canCancel && !canPay && !canReview) return null;
+    if (!canCancel && !canPay && !canReview && !canDispute) return null;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -802,11 +889,20 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                     label: 'Confirm & Pay',
                     onPressed: _actionLoading ? null : _releasePayment)),
           if (canPay && canReview) const SizedBox(width: 12),
+          if (canDispute) ...[
+            Expanded(
+                child: DoerButton(
+                    label: 'Raise Dispute',
+                    isOutlined: true,
+                    icon: Icons.gavel_rounded,
+                    onPressed: _actionLoading ? null : _raiseDispute)),
+            if (canReview) const SizedBox(width: 12),
+          ],
           if (canReview)
             Expanded(
                 child: DoerButton(
                     label: 'Leave Review',
-                    isOutlined: canPay,
+                    isOutlined: canPay || canDispute,
                     icon: Icons.star_outline_rounded,
                     onPressed: () {
                       final workerName = _job?['worker']?['user']?['name'] ?? 'Worker';
