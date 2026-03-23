@@ -252,7 +252,7 @@ router.post(
       }
     }
 
-    // Set status to PENDING for admin review
+    // Set status to PENDING initially
     updateData.verificationStatus = 'PENDING';
     updateData.rejectionReason = null;
 
@@ -262,7 +262,67 @@ router.post(
       include: { qualificationDocs: true },
     });
 
-    res.json({ profile });
+    // Trigger AI pre-screening asynchronously
+    const imageUrls = [
+      profile.nicFrontUrl,
+      profile.nicBackUrl,
+      profile.backgroundCheckUrl,
+    ].filter((url): url is string => !!url);
+
+    // Add qualification doc URLs
+    for (const doc of profile.qualificationDocs) {
+      imageUrls.push(doc.url);
+    }
+
+    let aiResult = null;
+    if (imageUrls.length > 0) {
+      try {
+        const { screenDocuments } = await import('../services/aiScreening');
+        aiResult = await screenDocuments(imageUrls);
+
+        // Determine verification status based on AI decision
+        let newStatus: string = 'PENDING';
+        if (aiResult.decision === 'PASS') newStatus = 'AI_PASSED';
+        else if (aiResult.decision === 'FLAG') newStatus = 'AI_FLAGGED';
+        else if (aiResult.decision === 'REJECT') newStatus = 'AI_REJECTED';
+
+        await prisma.workerProfile.update({
+          where: { id: workerProfile.id },
+          data: {
+            verificationStatus: newStatus as any,
+            aiScreeningResult: aiResult as any,
+            aiConfidenceScore: aiResult.confidence,
+            aiDecision: aiResult.decision,
+            aiScreenedAt: new Date(),
+            ...(aiResult.decision === 'REJECT' ? { rejectionReason: aiResult.rejection_reason || 'Documents did not pass automated screening' } : {}),
+          },
+        });
+
+        // Notify admin if flagged (priority review)
+        if (aiResult.decision === 'FLAG') {
+          const admins = await prisma.user.findMany({ where: { role: 'ADMIN' } });
+          const { createNotification } = await import('./notifications');
+          for (const admin of admins) {
+            await createNotification(
+              admin.id,
+              'Flagged Documents — Priority Review',
+              `Worker ${profile.userId} documents flagged by AI screening. Confidence: ${(aiResult.confidence * 100).toFixed(0)}%. Reason: ${aiResult.flag_reason || 'Uncertain'}`
+            );
+          }
+        }
+      } catch (e) {
+        console.error('AI screening error (non-blocking):', e);
+        // Non-blocking — worker proceeds with PENDING status
+      }
+    }
+
+    // Re-fetch the updated profile
+    const updatedProfile = await prisma.workerProfile.findUnique({
+      where: { id: workerProfile.id },
+      include: { qualificationDocs: true },
+    });
+
+    res.json({ profile: updatedProfile, aiScreening: aiResult });
   })
 );
 
@@ -305,6 +365,12 @@ router.get(
       qualificationDocs: worker.qualificationDocs,
       nextBadge,
       nextBadgeHint: nextBadge ? nextBadgeInfo[nextBadge] : 'You have reached the highest level!',
+      aiScreening: worker.aiDecision ? {
+        decision: worker.aiDecision,
+        confidence: worker.aiConfidenceScore,
+        result: worker.aiScreeningResult,
+        screenedAt: worker.aiScreenedAt,
+      } : null,
     });
   })
 );

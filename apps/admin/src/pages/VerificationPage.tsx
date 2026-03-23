@@ -66,19 +66,36 @@ export default function VerificationPage() {
       (w.user?.email || '').toLowerCase().includes(q) ||
       (w.nicNumber || '').toLowerCase().includes(q)
     );
+  }).sort((a, b) => {
+    // AI_FLAGGED first, then PENDING, then AI_PASSED, then rest
+    const priority: Record<string, number> = {
+      AI_FLAGGED: 0, PENDING: 1, AI_PASSED: 2, AI_REJECTED: 3,
+      NOT_SUBMITTED: 4, VERIFIED: 5, REJECTED: 6,
+    };
+    return (priority[a.verificationStatus] ?? 9) - (priority[b.verificationStatus] ?? 9);
   });
 
   const statusBadge = (status: string) => {
     const styles: Record<string, string> = {
       NOT_SUBMITTED: 'bg-gray-100 text-gray-600',
       PENDING: 'bg-orange-100 text-orange-700',
+      AI_PASSED: 'bg-blue-100 text-blue-700',
+      AI_FLAGGED: 'bg-amber-100 text-amber-800',
+      AI_REJECTED: 'bg-red-100 text-red-700',
       VERIFIED: 'bg-green-100 text-green-700',
       REJECTED: 'bg-red-100 text-red-700',
     };
+    const icons: Record<string, any> = {
+      VERIFIED: <CheckCircle size={10} />,
+      REJECTED: <XCircle size={10} />,
+      AI_REJECTED: <XCircle size={10} />,
+      AI_PASSED: <CheckCircle size={10} />,
+      AI_FLAGGED: <Clock size={10} />,
+    };
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${styles[status] || 'bg-warm-100 text-warm-700'}`}>
-        {status === 'VERIFIED' ? <CheckCircle size={10} /> : status === 'REJECTED' ? <XCircle size={10} /> : <Clock size={10} />}
-        {status}
+        {icons[status] || <Clock size={10} />}
+        {status.replace(/_/g, ' ')}
       </span>
     );
   };
@@ -127,6 +144,9 @@ export default function VerificationPage() {
             <option value="">All Status</option>
             <option value="NOT_SUBMITTED">Not Submitted</option>
             <option value="PENDING">Pending</option>
+            <option value="AI_PASSED">AI Passed</option>
+            <option value="AI_FLAGGED">AI Flagged</option>
+            <option value="AI_REJECTED">AI Rejected</option>
             <option value="VERIFIED">Verified</option>
             <option value="REJECTED">Rejected</option>
           </select>
@@ -274,6 +294,86 @@ function WorkerVerifyModal({ worker: w, onClose, onAction, actionLoading }: {
                 </div>
               </div>
             </div>
+
+            {/* AI Screening Results */}
+            {w.aiDecision && (
+              <div className={`p-4 rounded-xl border ${
+                w.aiDecision === 'PASS' ? 'bg-blue-50 border-blue-200' :
+                w.aiDecision === 'FLAG' ? 'bg-amber-50 border-amber-200' :
+                'bg-red-50 border-red-200'
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <h5 className="font-semibold text-warm-800 flex items-center gap-2">
+                    <ShieldCheck size={16} />
+                    AI Pre-Screening Result
+                  </h5>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                      w.aiDecision === 'PASS' ? 'bg-blue-200 text-blue-800' :
+                      w.aiDecision === 'FLAG' ? 'bg-amber-200 text-amber-800' :
+                      'bg-red-200 text-red-800'
+                    }`}>{w.aiDecision}</span>
+                    {w.aiConfidenceScore != null && (
+                      <span className="text-xs text-warm-500">
+                        {(w.aiConfidenceScore * 100).toFixed(0)}% confidence
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {w.aiScreeningResult && (
+                  <div className="space-y-2 text-sm">
+                    {w.aiScreeningResult.summary && (
+                      <p className="text-warm-700">{w.aiScreeningResult.summary}</p>
+                    )}
+                    <div className="grid grid-cols-2 gap-3 mt-2">
+                      {w.aiScreeningResult.nic?.detected && (
+                        <div className="bg-white/60 rounded-lg p-2">
+                          <p className="text-xs font-medium text-warm-500">NIC</p>
+                          <p className="text-sm text-warm-800">{w.aiScreeningResult.nic.number || 'Detected'}</p>
+                          <p className="text-xs text-warm-500">{w.aiScreeningResult.nic.name_extracted || ''}</p>
+                        </div>
+                      )}
+                      {w.aiScreeningResult.police_report?.detected && (
+                        <div className="bg-white/60 rounded-lg p-2">
+                          <p className="text-xs font-medium text-warm-500">Police Report</p>
+                          <p className="text-sm text-warm-800">Status: {w.aiScreeningResult.police_report.clearance_status}</p>
+                          <p className="text-xs text-warm-500">{w.aiScreeningResult.police_report.date || ''}</p>
+                        </div>
+                      )}
+                      {w.aiScreeningResult.qualifications?.detected && (
+                        <div className="bg-white/60 rounded-lg p-2">
+                          <p className="text-xs font-medium text-warm-500">Qualifications</p>
+                          <p className="text-sm text-warm-800">{w.aiScreeningResult.qualifications.skill || 'Detected'}</p>
+                        </div>
+                      )}
+                      {w.aiScreeningResult.cross_check && (
+                        <div className="bg-white/60 rounded-lg p-2">
+                          <p className="text-xs font-medium text-warm-500">Name Cross-Check</p>
+                          <p className={`text-sm ${w.aiScreeningResult.cross_check.names_match ? 'text-green-700' : 'text-red-700'}`}>
+                            {w.aiScreeningResult.cross_check.names_match ? 'Names match' : 'Names mismatch'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    {(w.aiScreeningResult.flag_reason || w.aiScreeningResult.rejection_reason) && (
+                      <div className="mt-2 p-2 bg-white/60 rounded-lg">
+                        <p className="text-xs font-medium text-warm-500">
+                          {w.aiDecision === 'FLAG' ? 'Flag Reason' : 'Rejection Reason'}
+                        </p>
+                        <p className="text-sm text-warm-700">
+                          {w.aiScreeningResult.flag_reason || w.aiScreeningResult.rejection_reason}
+                        </p>
+                      </div>
+                    )}
+                    {w.aiScreenedAt && (
+                      <p className="text-xs text-warm-400 mt-1">
+                        Screened: {new Date(w.aiScreenedAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 1. NIC Verification */}
             <DocSection

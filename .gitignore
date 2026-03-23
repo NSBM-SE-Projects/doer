@@ -37,5 +37,6 @@ apps/mobile-worker/build/
 *.g.dart
 *.freezed.dart
 
-TODO.md
-DIAGRAMS.md
+References
+CLAUDE.md
+Data
