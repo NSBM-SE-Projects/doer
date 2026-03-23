@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import {
   LayoutDashboard,
   Users,
@@ -14,23 +15,25 @@ import {
   Menu,
   X,
   ChevronRight,
+  Languages,
 } from 'lucide-react';
-
-const navItems = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/users', label: 'Users', icon: Users },
-  { path: '/verification', label: 'Verification', icon: ShieldCheck },
-  { path: '/jobs', label: 'Jobs', icon: Briefcase },
-  { path: '/categories', label: 'Categories', icon: FolderOpen },
-  { path: '/payments', label: 'Payments', icon: CreditCard },
-  { path: '/disputes', label: 'Disputes', icon: AlertTriangle },
-  { path: '/matching', label: 'Matching Demo', icon: Zap },
-];
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const { lang, setLang, t } = useLanguage();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const navItems = [
+    { path: '/', label: t('dashboard'), icon: LayoutDashboard },
+    { path: '/users', label: t('users'), icon: Users },
+    { path: '/verification', label: t('verification'), icon: ShieldCheck },
+    { path: '/jobs', label: t('jobs'), icon: Briefcase },
+    { path: '/categories', label: t('categories'), icon: FolderOpen },
+    { path: '/payments', label: t('payments'), icon: CreditCard },
+    { path: '/disputes', label: t('disputes'), icon: AlertTriangle },
+    { path: '/matching', label: t('matchingDemo'), icon: Zap },
+  ];
 
   return (
     <div className="min-h-screen bg-warm-50 flex">
@@ -105,7 +108,7 @@ export default function Layout() {
             <button
               onClick={logout}
               className="text-warm-400 hover:text-red-600 transition-colors"
-              title="Logout"
+              title={t('logout')}
             >
               <LogOut size={18} />
             </button>
@@ -116,21 +119,31 @@ export default function Layout() {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <header className="h-16 bg-white border-b border-warm-300 flex items-center px-4 lg:px-6">
+        <header className="h-16 bg-white border-b border-warm-300 flex items-center px-4 lg:px-6 gap-4">
           <button
-            className="lg:hidden text-warm-500 hover:text-warm-700 mr-4"
+            className="lg:hidden text-warm-500 hover:text-warm-700 mr-2"
             onClick={() => setSidebarOpen(true)}
           >
             <Menu size={24} />
           </button>
-          <h1 className="text-lg font-semibold text-warm-800">
+          <h1 className="text-lg font-semibold text-warm-800 flex-1">
             {navItems.find(
               (item) =>
                 item.path === '/'
                   ? location.pathname === '/'
                   : location.pathname.startsWith(item.path)
-            )?.label || 'Admin Panel'}
+            )?.label || t('adminPanel')}
           </h1>
+
+          {/* Language toggle */}
+          <button
+            onClick={() => setLang(lang === 'en' ? 'si' : 'en')}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-warm-300 rounded-lg text-sm text-warm-600 hover:bg-warm-50 transition-colors"
+            title={t('language')}
+          >
+            <Languages size={15} />
+            <span className="font-medium">{lang === 'si' ? 'සිං' : 'EN'}</span>
+          </button>
         </header>
 
         {/* Page content */}

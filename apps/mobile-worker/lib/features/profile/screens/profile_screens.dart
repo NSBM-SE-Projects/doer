@@ -8,6 +8,8 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/locale_service.dart';
+import '../../../core/l10n/app_localizations.dart';
 import '../../../core/router/app_router.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -901,16 +903,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   showDialog(
                     context: context,
                     builder: (ctx) => SimpleDialog(
-                      title: const Text('Select Language'),
-                      children: ['English', 'Sinhala', 'Tamil'].map((lang) =>
+                      title: Text(AppLocalizations.of(context).selectLanguage),
+                      children: LocaleService.languages.map((lang) =>
                         SimpleDialogOption(
-                          child: Text(lang),
+                          child: Row(
+                            children: [
+                              Text(lang.nativeLabel),
+                              const SizedBox(width: 8),
+                              Text('(${lang.label})', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                              if (LocaleService().languageCode == lang.code) ...[
+                                const Spacer(),
+                                const Icon(Icons.check_rounded, size: 18, color: AppColors.primary),
+                              ],
+                            ],
+                          ),
                           onPressed: () async {
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setString('w_language', lang);
+                            await LocaleService().setLanguageCode(lang.code);
                             if (ctx.mounted) Navigator.pop(ctx);
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Language set to $lang')));
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Language set to ${lang.label}')));
                             }
                           },
                         ),

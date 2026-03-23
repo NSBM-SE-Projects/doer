@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_theme.dart';
+import '../core/l10n/app_localizations.dart';
 import '../features/dashboard/screens/dashboard_screen.dart';
 import '../features/jobs/screens/browse_jobs_screen.dart';
 import '../features/jobs/screens/my_jobs_screen.dart';
@@ -56,14 +57,14 @@ class _MainShellState extends State<MainShell> {
                 _NavItem(
                   icon: Icons.dashboard_outlined,
                   activeIcon: Icons.dashboard_rounded,
-                  label: 'Dashboard',
+                  label: AppLocalizations.of(context).dashboard,
                   isActive: _currentIndex == 0,
                   onTap: () => setState(() => _currentIndex = 0),
                 ),
                 _NavItem(
                   icon: Icons.work_outline_rounded,
                   activeIcon: Icons.work_rounded,
-                  label: 'Browse',
+                  label: AppLocalizations.of(context).browse,
                   isActive: _currentIndex == 1,
                   onTap: () => setState(() => _currentIndex = 1),
                 ),
@@ -97,7 +98,7 @@ class _MainShellState extends State<MainShell> {
                 _NavItem(
                   icon: Icons.chat_bubble_outline_rounded,
                   activeIcon: Icons.chat_bubble_rounded,
-                  label: 'Messages',
+                  label: AppLocalizations.of(context).messages,
                   isActive: _currentIndex == 3,
                   onTap: () => setState(() {
                     _currentIndex = 3;
@@ -107,7 +108,7 @@ class _MainShellState extends State<MainShell> {
                 _NavItem(
                   icon: Icons.person_outline_rounded,
                   activeIcon: Icons.person_rounded,
-                  label: 'Profile',
+                  label: AppLocalizations.of(context).profile,
                   isActive: _currentIndex == 4,
                   onTap: () => setState(() => _currentIndex = 4),
                 ),

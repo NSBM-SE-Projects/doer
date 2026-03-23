@@ -5,6 +5,8 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/api_service.dart';
+import '../../../core/services/locale_service.dart';
+import '../../../core/l10n/app_localizations.dart';
 
 // ──────────────────────────────────────────────────────────────
 // PROFILE SCREEN
@@ -37,22 +39,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showLanguagePicker(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final currentCode = LocaleService().languageCode;
     showDialog(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Select Language'),
-        children: ['English', 'Sinhala', 'Tamil'].map((lang) =>
+        title: Text(l10n.selectLanguage),
+        children: LocaleService.languages.map((lang) =>
           SimpleDialogOption(
-            child: Text(lang, style: AppTypography.bodyMedium),
+            child: Row(
+              children: [
+                Text(lang.nativeLabel, style: AppTypography.bodyMedium),
+                const SizedBox(width: 8),
+                Text('(${lang.label})', style: AppTypography.bodySmall),
+                if (currentCode == lang.code) ...[
+                  const Spacer(),
+                  const Icon(Icons.check_rounded, size: 18, color: AppColors.primary),
+                ],
+              ],
+            ),
             onPressed: () async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setString('c_language', lang);
+              await LocaleService().setLanguageCode(lang.code);
               if (ctx.mounted) Navigator.pop(ctx);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Language set to $lang')),
-                );
-              }
             },
           ),
         ).toList(),

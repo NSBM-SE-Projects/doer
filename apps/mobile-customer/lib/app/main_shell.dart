@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_theme.dart';
+import '../core/l10n/app_localizations.dart';
 import '../features/home/screens/home_screen.dart';
 import '../features/jobs/screens/my_jobs_screen.dart';
 import '../features/jobs/screens/post_job_screen.dart';
@@ -57,14 +58,14 @@ class _MainShellState extends State<MainShell> {
                 _NavItem(
                   icon: Icons.home_outlined,
                   activeIcon: Icons.home_rounded,
-                  label: 'Home',
+                  label: AppLocalizations.of(context).home,
                   isActive: _currentIndex == 0,
                   onTap: () => setState(() => _currentIndex = 0),
                 ),
                 _NavItem(
                   icon: Icons.work_outline_rounded,
                   activeIcon: Icons.work_rounded,
-                  label: 'My Jobs',
+                  label: AppLocalizations.of(context).myJobs,
                   isActive: _currentIndex == 1,
                   onTap: () => setState(() => _currentIndex = 1),
                 ),
@@ -98,7 +99,7 @@ class _MainShellState extends State<MainShell> {
                 _NavItem(
                   icon: Icons.chat_bubble_outline_rounded,
                   activeIcon: Icons.chat_bubble_rounded,
-                  label: 'Messages',
+                  label: AppLocalizations.of(context).messages,
                   isActive: _currentIndex == 3,
                   onTap: () => setState(() {
                     _currentIndex = 3;
@@ -108,7 +109,7 @@ class _MainShellState extends State<MainShell> {
                 _NavItem(
                   icon: Icons.person_outline_rounded,
                   activeIcon: Icons.person_rounded,
-                  label: 'Profile',
+                  label: AppLocalizations.of(context).profile,
                   isActive: _currentIndex == 4,
                   onTap: () => setState(() => _currentIndex = 4),
                 ),
