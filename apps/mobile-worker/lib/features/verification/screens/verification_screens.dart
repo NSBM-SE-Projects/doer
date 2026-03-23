@@ -61,6 +61,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
         _qualificationDocs = data['qualificationDocs'] ?? [];
         _nextBadge = data['nextBadge'];
         _nextBadgeHint = data['nextBadgeHint'] ?? '';
+        _aiScreeningData = data['aiScreening'] as Map<String, dynamic>?;
       });
     } catch (e) {
       // If endpoint not available yet, use defaults
@@ -84,11 +85,21 @@ class _VerificationScreenState extends State<VerificationScreen> {
     switch (status) {
       case 'NOT_SUBMITTED': return VerificationStatus.pending;
       case 'PENDING': return VerificationStatus.submitted;
+      case 'AI_PASSED': return 'AI Verified';
+      case 'AI_FLAGGED': return 'Under Review';
+      case 'AI_REJECTED': return VerificationStatus.rejected;
       case 'VERIFIED': return VerificationStatus.approved;
       case 'REJECTED': return VerificationStatus.rejected;
       default: return VerificationStatus.pending;
     }
   }
+
+  // AI screening data from the verification endpoint
+  Map<String, dynamic>? get _aiScreening {
+    // This gets populated from _loadStatus if backend returns it
+    return _aiScreeningData;
+  }
+  Map<String, dynamic>? _aiScreeningData;
 
   double _badgeProgress() {
     const levels = [BadgeLevel.trainee, BadgeLevel.bronze, BadgeLevel.silver, BadgeLevel.gold, BadgeLevel.platinum];
@@ -126,8 +137,67 @@ class _VerificationScreenState extends State<VerificationScreen> {
             // Current badge + progress
             _buildBadgeProgressCard(),
 
-            // Rejection banner
-            if (_verificationStatus == 'REJECTED' && _rejectionReason != null) ...[
+            // AI Screening banners
+            if (_verificationStatus == 'AI_PASSED') ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: Colors.blue, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Documents Pre-Verified', style: AppTypography.headlineSmall.copyWith(color: Colors.blue)),
+                          const SizedBox(height: 4),
+                          Text('Your documents passed automated screening. An admin will complete the final review.',
+                            style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            if (_verificationStatus == 'AI_FLAGGED') ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.hourglass_top_rounded, color: AppColors.warning, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Documents Under Review', style: AppTypography.headlineSmall.copyWith(color: AppColors.warning)),
+                          const SizedBox(height: 4),
+                          Text('Your documents need additional review. You\'ll be notified within 24 hours.',
+                            style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Rejection banner (AI_REJECTED or admin REJECTED)
+            if ((_verificationStatus == 'REJECTED' || _verificationStatus == 'AI_REJECTED') && _rejectionReason != null) ...[
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(14),
@@ -145,11 +215,14 @@ class _VerificationScreenState extends State<VerificationScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Verification Rejected', style: AppTypography.headlineSmall.copyWith(color: AppColors.error)),
+                          Text(
+                            _verificationStatus == 'AI_REJECTED' ? 'Documents Not Accepted' : 'Verification Rejected',
+                            style: AppTypography.headlineSmall.copyWith(color: AppColors.error),
+                          ),
                           const SizedBox(height: 4),
                           Text(_rejectionReason!, style: AppTypography.bodySmall),
                           const SizedBox(height: 8),
-                          Text('Please re-submit your documents.', style: AppTypography.labelSmall.copyWith(color: AppColors.error)),
+                          Text('Please re-submit correct documents.', style: AppTypography.labelSmall.copyWith(color: AppColors.error)),
                         ],
                       ),
                     ),

@@ -41,6 +41,9 @@ enum ApplicationStatus {
 enum VerificationStatus {
   NOT_SUBMITTED
   PENDING
+  AI_PASSED
+  AI_FLAGGED
+  AI_REJECTED
   VERIFIED
   REJECTED
 }
@@ -118,6 +121,10 @@ model WorkerProfile {
   badgeLevel             BadgeLevel         @default(TRAINEE)
   rejectionReason        String?
   verificationStatus     VerificationStatus @default(NOT_SUBMITTED)
+  aiScreeningResult      Json?
+  aiConfidenceScore      Float?
+  aiDecision             String?
+  aiScreenedAt           DateTime?
   isAvailable        Boolean            @default(true)
   rating             Float              @default(0)
   totalJobs          Int                @default(0)
