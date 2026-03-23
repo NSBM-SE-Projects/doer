@@ -13,6 +13,8 @@ import uploadRoutes from './upload';
 import portfolioRoutes from './portfolio';
 import adminRoutes from './admin';
 import matchingRoutes from './matching';
+import estimationRoutes from './estimation';
+import estimationAdminRoutes from './estimationAdmin';
 
 const router = Router();
 
@@ -30,5 +32,7 @@ router.use('/agora', agoraRoutes);
 router.use('/upload', uploadRoutes);
 router.use('/portfolio', portfolioRoutes);
 router.use('/admin', adminRoutes);
+router.use('/jobs', estimationRoutes);
+router.use('/estimation', estimationAdminRoutes);
 
 export default router;

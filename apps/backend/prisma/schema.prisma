@@ -46,6 +46,9 @@ enum VerificationStatus {
   AI_REJECTED
   VERIFIED
   REJECTED
+  AI_PASSED
+  AI_FLAGGED
+  AI_REJECTED
 }
 
 enum BadgeLevel {
@@ -71,6 +74,26 @@ enum MatchStatus {
   ACCEPTED
   REJECTED
   EXPIRED
+}
+
+enum ComplexityLevel {
+  SIMPLE
+  MODERATE
+  COMPLEX
+  EXPERT
+}
+
+enum EstimationMethod {
+  RULE_BASED
+  HISTORICAL_AVG
+  WEIGHTED_REGRESSION
+}
+
+enum EstimationTier {
+  PERFECT
+  GREAT
+  GOOD
+  FAIR
 }
 
 model User {
@@ -120,6 +143,10 @@ model WorkerProfile {
   backgroundCheckVerified Boolean           @default(false)
   badgeLevel             BadgeLevel         @default(TRAINEE)
   rejectionReason        String?
+  aiScreeningResult      String?
+  aiDecision             String?
+  aiConfidenceScore      Float?
+  aiScreenedAt           DateTime?
   verificationStatus     VerificationStatus @default(NOT_SUBMITTED)
   aiScreeningResult      Json?
   aiConfidenceScore      Float?
@@ -158,6 +185,9 @@ model ServiceCategory {
   workers     WorkerCategory[]
   portfolioItems PortfolioItem[]
   jobs        Job[]
+
+  durationBaseline CategoryDurationBaseline?
+  durationLogs     JobDurationLog[]
 }
 
 model WorkerCategory {
@@ -202,6 +232,9 @@ model Job {
   payment       Payment?
   applications  JobApplication[]
   jobMatches    JobMatch[]
+
+  durationEstimate JobDurationEstimate?
+  durationLog      JobDurationLog?
 }
 
 model JobApplication {
@@ -321,4 +354,63 @@ model Notification {
 
   userId    String
   user      User     @relation(fields: [userId], references: [id])
+}
+
+// ─── Job Duration Estimation System ─────────────────────────────────────────
+
+model JobDurationEstimate {
+  id                 String           @id @default(cuid())
+  estimatedMinutes   Int
+  confidenceScore    Float            // 0.0 - 1.0
+  delayRiskPercent   Float            // 0 - 100
+  estimatedStartAt   DateTime?
+  estimatedEndAt     DateTime?
+  complexity         ComplexityLevel  @default(MODERATE)
+  tier               EstimationTier   @default(GOOD)
+  method             EstimationMethod @default(RULE_BASED)
+  dataPointsUsed     Int              @default(0)
+  factors            String?          // JSON breakdown for explainability
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  jobId              String           @unique
+  job                Job              @relation(fields: [jobId], references: [id])
+}
+
+model JobDurationLog {
+  id                  String          @id @default(cuid())
+  actualMinutes       Int
+  estimatedMinutes    Int?
+  complexity          ComplexityLevel
+  urgency             Urgency
+  descriptionKeywords String[]
+  workerTotalJobs     Int
+  workerRating        Float
+  workerBadgeLevel    String
+  isSynthetic         Boolean         @default(false)
+  completedAt         DateTime
+  createdAt           DateTime        @default(now())
+
+  jobId               String          @unique
+  categoryId          String
+  workerId            String?
+
+  job                 Job             @relation(fields: [jobId], references: [id])
+  category            ServiceCategory @relation(fields: [categoryId], references: [id])
+}
+
+model CategoryDurationBaseline {
+  id                    String          @id @default(cuid())
+  defaultMinutes        Int
+  avgMinutes            Float?
+  medianMinutes         Float?
+  stdDevMinutes         Float?
+  p90Minutes            Float?          // 90th percentile
+  sampleCount           Int             @default(0)
+  complexityMultipliers String?         // JSON: {"SIMPLE": 0.5, "MODERATE": 1.0, ...}
+  keywordModifiers      String?         // JSON: {"install": 1.3, "repair": 0.8, ...}
+  updatedAt             DateTime        @updatedAt
+
+  categoryId            String          @unique
+  category              ServiceCategory @relation(fields: [categoryId], references: [id])
 }

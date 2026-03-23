@@ -8,6 +8,7 @@ import { createNotification } from './notifications';
 import { getIO } from '../sockets';
 import { geocode } from '../config/maps';
 import { matchWorkersForJob } from '../services/matching.service';
+import { estimateJobDuration, recordActualDuration } from '../services/estimation.service';
 
 const router = Router();
 
@@ -147,7 +148,15 @@ router.post(
       }
     }
 
-    res.status(201).json({ job, matches });
+    // Auto-estimate duration
+    let durationEstimate = null;
+    try {
+      durationEstimate = await estimateJobDuration(job.id);
+    } catch (_) {
+      // Estimation is best-effort — don't fail job creation
+    }
+
+    res.status(201).json({ job, matches, durationEstimate });
   })
 );
 
@@ -395,6 +404,13 @@ router.patch(
       data: { totalJobs: { increment: 1 } },
     });
     await recalculateWorkerStats(job.workerId!);
+
+    // Record actual duration for the estimation learning pipeline
+    try {
+      await recordActualDuration(job.id);
+    } catch (_) {
+      // Non-critical — don't fail job completion
+    }
 
     // Notify customer
     const cp = await prisma.customerProfile.findUnique({ where: { id: job.customerId } });
