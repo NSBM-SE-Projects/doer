@@ -25,7 +25,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "seed:admin": "ts-node src/seed-admin.ts",
-    "seed:matching": "ts-node src/seed-matching.ts"
+    "seed:matching": "ts-node src/seed-matching.ts",
+    "seed:estimation": "ts-node src/seed-estimation.ts"
   },
   "dependencies": {
     "@googlemaps/google-maps-services-js": "^3.4.0",
