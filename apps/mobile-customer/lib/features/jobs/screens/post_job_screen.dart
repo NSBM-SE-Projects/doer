@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -6,6 +7,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/services/api_service.dart';
 import 'location_picker_screen.dart';
+import 'recommended_workers_screen.dart';
 
 class PostJobScreen extends StatefulWidget {
   const PostJobScreen({super.key});
@@ -195,20 +197,52 @@ class _PostJobScreenState extends State<PostJobScreen> {
         );
       }
 
-      await ApiService().createJob(
+      // Upload photos to Cloudinary if any
+      List<String>? imageUrls;
+      if (_photos.isNotEmpty) {
+        try {
+          final base64Images = <String>[];
+          for (final photo in _photos) {
+            final bytes = await File(photo.path).readAsBytes();
+            final b64 = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+            base64Images.add(b64);
+          }
+          imageUrls = await ApiService().uploadImages(base64Images);
+        } catch (_) {
+          // Continue without images if upload fails
+        }
+      }
+
+      final result = await ApiService().createJob(
         title: _titleController.text.trim(),
         description: _descController.text.trim(),
         categoryId: catId,
         price: budgetMax ?? budgetMin,
+        budgetMin: budgetMin,
+        budgetMax: budgetMax,
+        urgency: _urgency,
         latitude: _latitude,
         longitude: _longitude,
         address: _address,
         scheduledAt: scheduledAt?.toUtc().toIso8601String(),
+        imageUrls: imageUrls,
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Job posted successfully!'), backgroundColor: AppColors.success));
-        Navigator.pop(context);
+        final jobData = result['job'];
+        final matches = result['matches'] as List? ?? [];
+        final jobId = jobData?['id'] ?? '';
+        final jobTitle = jobData?['title'] ?? _titleController.text.trim();
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => RecommendedWorkersScreen(
+              jobId: jobId,
+              jobTitle: jobTitle,
+              initialMatches: matches,
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) _showError(ApiService.errorMessage(e));

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:timeago/timeago.dart' as timeago;
@@ -45,12 +46,28 @@ class _RateReviewScreenState extends State<RateReviewScreen> {
   Future<void> _submitReview() async {
     setState(() => _submitting = true);
     try {
+      // Upload photos if any
+      List<String>? photoUrls;
+      if (_photos.isNotEmpty) {
+        try {
+          final base64Images = <String>[];
+          for (final photo in _photos) {
+            final bytes = await photo.readAsBytes();
+            base64Images.add('data:image/jpeg;base64,${base64Encode(bytes)}');
+          }
+          photoUrls = await ApiService().uploadImages(base64Images, folder: 'doer/reviews');
+        } catch (_) {
+          // Continue without photos if upload fails
+        }
+      }
+
       await ApiService().reviewJob(
         widget.jobId,
         rating: _rating,
         comment: _reviewController.text.trim().isNotEmpty
             ? _reviewController.text.trim()
             : null,
+        photoUrls: photoUrls,
       );
       if (!mounted) return;
       Navigator.pop(context);

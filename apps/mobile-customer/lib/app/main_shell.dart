@@ -135,8 +135,8 @@ class _NavItem extends StatelessWidget {
     required this.activeIcon,
     required this.label,
     required this.isActive,
-    this.badge,
     required this.onTap,
+    this.badge,
   });
 
   @override

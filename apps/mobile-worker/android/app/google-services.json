@@ -1,0 +1,82 @@
+{
+  "project_info": {
+    "project_number": "563057133005",
+    "project_id": "doer-home-services",
+    "storage_bucket": "doer-home-services.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:563057133005:android:25d7b0a498505bfbbeb084",
+        "android_client_info": {
+          "package_name": "com.doer.doer"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "563057133005-krh0ou9spp6k4omactpm40hcan4lu85i.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDlYooo-DvtaSPSQVuPJ74YUj1HwcTG-nM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "563057133005-krh0ou9spp6k4omactpm40hcan4lu85i.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "563057133005-6e2dntlinept3r9lsmkcfk93fk3mmu2h.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.doer.doer"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:563057133005:android:7ad00b9ed2844981beb084",
+        "android_client_info": {
+          "package_name": "com.doer.doer_worker"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "563057133005-krh0ou9spp6k4omactpm40hcan4lu85i.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDlYooo-DvtaSPSQVuPJ74YUj1HwcTG-nM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "563057133005-krh0ou9spp6k4omactpm40hcan4lu85i.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "563057133005-6e2dntlinept3r9lsmkcfk93fk3mmu2h.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.doer.doer"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

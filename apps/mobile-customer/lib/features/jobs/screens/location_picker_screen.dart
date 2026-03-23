@@ -240,7 +240,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                           : ListView.separated(
                               shrinkWrap: true,
                               itemCount: _predictions.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              separatorBuilder: (_, _) => const Divider(height: 1),
                               itemBuilder: (_, i) {
                                 final p = _predictions[i];
                                 return ListTile(

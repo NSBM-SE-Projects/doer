@@ -69,6 +69,25 @@ class _MyJobsScreenState extends State<MyJobsScreen>
     return cat.isNotEmpty ? cat.first.icon : '🔧';
   }
 
+  String _formatBudget(Map<String, dynamic> job) {
+    final min = job['budgetMin'];
+    final max = job['budgetMax'];
+    final price = job['price'];
+    if (min != null && max != null) return 'Rs. ${min.toStringAsFixed(0)} — ${max.toStringAsFixed(0)}';
+    if (price != null) return 'Rs. ${price.toStringAsFixed(0)}';
+    return 'Negotiable';
+  }
+
+  String _formatTime(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final dt = DateTime.parse(dateStr).toLocal();
+      final hour = dt.hour > 12 ? dt.hour - 12 : dt.hour;
+      final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+      return '${hour == 0 ? 12 : hour}:${dt.minute.toString().padLeft(2, '0')} $ampm';
+    } catch (_) { return ''; }
+  }
+
   JobDetailData _jobDetailFromMap(Map<String, dynamic> job) {
     final catName = job['category']?['name'] ?? '';
     return JobDetailData(
@@ -76,7 +95,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
       title: job['title'] ?? '',
       category: catName,
       categoryIcon: _getCategoryIcon(catName),
-      budget: job['price'] != null ? 'Rs. ${job['price'].toStringAsFixed(0)}' : 'Negotiable',
+      budget: _formatBudget(job),
       distanceKm: 0,
       postedAt: _formatDate(job['createdAt']),
       clientName: job['customer']?['user']?['name'] ?? 'Customer',
@@ -84,8 +103,12 @@ class _MyJobsScreenState extends State<MyJobsScreen>
       clientJobsPosted: 0,
       description: job['description'] ?? '',
       scheduledDate: _formatDate(job['scheduledAt']),
+      scheduledTime: _formatTime(job['scheduledAt']),
+      urgency: job['urgency'],
       address: job['address'] ?? '',
       status: job['status'],
+      lat: (job['latitude'] as num?)?.toDouble(),
+      lng: (job['longitude'] as num?)?.toDouble(),
     );
   }
 
@@ -147,7 +170,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
                             child: ListView.separated(
                               padding: const EdgeInsets.symmetric(horizontal: 20),
                               itemCount: _activeJobs.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              separatorBuilder: (_, _) => const SizedBox(height: 12),
                               itemBuilder: (_, i) {
                                 final job = _activeJobs[i];
                                 return ActiveJobCard(
@@ -178,7 +201,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
                             child: ListView.separated(
                               padding: const EdgeInsets.symmetric(horizontal: 20),
                               itemCount: _appliedJobs.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              separatorBuilder: (_, _) => const SizedBox(height: 12),
                               itemBuilder: (_, i) {
                                 final app = _appliedJobs[i];
                                 final job = app['job'] ?? {};
@@ -210,7 +233,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
                             child: ListView.separated(
                               padding: const EdgeInsets.symmetric(horizontal: 20),
                               itemCount: _completedJobs.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              separatorBuilder: (_, _) => const SizedBox(height: 12),
                               itemBuilder: (_, i) {
                                 final job = _completedJobs[i];
                                 return _CompletedJobCard(

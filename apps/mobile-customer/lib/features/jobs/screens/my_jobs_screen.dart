@@ -42,7 +42,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
       final jobs = data['jobs'] as List;
       setState(() {
         _activeJobs = jobs.where((j) => j['status'] == 'OPEN' || j['status'] == 'APPLICATIONS_RECEIVED' || j['status'] == 'ASSIGNED' || j['status'] == 'IN_PROGRESS').toList();
-        _completedJobs = jobs.where((j) => j['status'] == 'COMPLETED').toList();
+        _completedJobs = jobs.where((j) => j['status'] == 'COMPLETED' || j['status'] == 'REVIEWING' || j['status'] == 'CLOSED').toList();
         _cancelledJobs = jobs.where((j) => j['status'] == 'CANCELLED').toList();
         _isLoading = false;
       });
@@ -134,7 +134,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
       child: ListView.separated(
         padding: const EdgeInsets.all(20),
         itemCount: jobs.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        separatorBuilder: (_, _) => const SizedBox(height: 12),
         itemBuilder: (_, i) {
           final job = jobs[i];
           final catName = job['category']?['name'] ?? '';
@@ -280,6 +280,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     switch (status) {
       case 'HELD': return 'Held in escrow';
       case 'RELEASED': return 'Released';
+      case 'DISPUTED': return 'Disputed';
       case 'REFUNDED': return 'Refunded';
       case 'PENDING': return 'Pending';
       default: return status.isNotEmpty ? status : 'N/A';
@@ -290,7 +291,8 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     switch (status) {
       case 'Held in escrow': return AppColors.warning;
       case 'Released': return AppColors.success;
-      case 'Refunded': return AppColors.error;
+      case 'Disputed': return AppColors.error;
+      case 'Refunded': return Colors.purple;
       default: return AppColors.textTertiary;
     }
   }
@@ -299,8 +301,91 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     switch (status) {
       case 'Held in escrow': return AppColors.warningLight;
       case 'Released': return AppColors.successLight;
+      case 'Disputed': return AppColors.errorLight;
       case 'Refunded': return AppColors.errorLight;
       default: return AppColors.surfaceVariant;
+    }
+  }
+
+  Future<void> _raiseDispute() async {
+    String? reason;
+    String? description;
+    final reasons = ['Poor quality', 'Incomplete work', 'Property damage', 'No show', 'Other'];
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (ctx) {
+        String selectedReason = reasons.first;
+        final descController = TextEditingController();
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            title: const Text('Raise Dispute'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Why are you raising a dispute?'),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedReason,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    items: reasons.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                    onChanged: (v) => setDialogState(() => selectedReason = v!),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      hintText: 'Describe the issue...',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              TextButton(
+                onPressed: () {
+                  if (descController.text.trim().isEmpty) return;
+                  Navigator.pop(ctx, {
+                    'reason': selectedReason,
+                    'description': descController.text.trim(),
+                  });
+                },
+                style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                child: const Text('Submit Dispute'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (result == null || !mounted) return;
+    reason = result['reason'];
+    description = result['description'];
+
+    setState(() => _actionLoading = true);
+    try {
+      await ApiService().raiseDispute(widget.jobId, reason: reason!, description: description!);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Dispute submitted. An admin will review it.'), backgroundColor: AppColors.warning),
+      );
+      _fetchJob();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ApiService.errorMessage(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _actionLoading = false);
     }
   }
 
@@ -770,13 +855,18 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
 
   Widget? _buildBottomBar() {
     final status = _job?['status']?.toString().toUpperCase() ?? '';
-    // Don't show action buttons for terminal states
     if (status == 'CANCELLED' || status == 'CLOSED') return null;
 
     final canCancel = status == 'OPEN' || status == 'ASSIGNED' || status == 'IN_PROGRESS';
-    final canRelease = status == 'COMPLETED';
+    final isCompletedOrReviewing = status == 'COMPLETED' || status == 'REVIEWING';
+    final hasPayment = _job?['payment'] != null;
+    final hasReview = _job?['review'] != null;
+    final paymentStatus = _job?['payment']?['status']?.toString().toUpperCase() ?? '';
+    final canPay = isCompletedOrReviewing && !hasPayment;
+    final canReview = isCompletedOrReviewing && !hasReview;
+    final canDispute = paymentStatus == 'HELD';
 
-    if (!canCancel && !canRelease) return null;
+    if (!canCancel && !canPay && !canReview && !canDispute) return null;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -792,17 +882,27 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                     label: 'Cancel Job',
                     isOutlined: true,
                     onPressed: _actionLoading ? null : _cancelJob)),
-          if (canCancel && canRelease) const SizedBox(width: 12),
-          if (canRelease) ...[
+          if (canCancel && (canPay || canReview)) const SizedBox(width: 12),
+          if (canPay)
             Expanded(
                 child: DoerButton(
                     label: 'Confirm & Pay',
                     onPressed: _actionLoading ? null : _releasePayment)),
-            const SizedBox(width: 12),
+          if (canPay && canReview) const SizedBox(width: 12),
+          if (canDispute) ...[
+            Expanded(
+                child: DoerButton(
+                    label: 'Raise Dispute',
+                    isOutlined: true,
+                    icon: Icons.gavel_rounded,
+                    onPressed: _actionLoading ? null : _raiseDispute)),
+            if (canReview) const SizedBox(width: 12),
+          ],
+          if (canReview)
             Expanded(
                 child: DoerButton(
                     label: 'Leave Review',
-                    isOutlined: true,
+                    isOutlined: canPay || canDispute,
                     icon: Icons.star_outline_rounded,
                     onPressed: () {
                       final workerName = _job?['worker']?['user']?['name'] ?? 'Worker';
@@ -815,7 +915,6 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                         ),
                       )).then((_) => _fetchJob());
                     })),
-          ],
         ],
       ),
     );

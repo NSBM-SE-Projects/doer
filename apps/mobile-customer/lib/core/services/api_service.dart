@@ -71,7 +71,7 @@ class ApiService {
       'email': email,
       'password': password,
       'name': name,
-      if (phone != null) 'phone': phone,
+      'phone': ?phone,
       'role': 'CUSTOMER',
     });
     await _saveJwt(resp.data['token']);
@@ -139,9 +139,9 @@ class ApiService {
     String? name, String? phone, String? avatarUrl,
   }) async {
     final resp = await _dio.put('/users/me', data: {
-      if (name != null) 'name': name,
-      if (phone != null) 'phone': phone,
-      if (avatarUrl != null) 'avatarUrl': avatarUrl,
+      'name': ?name,
+      'phone': ?phone,
+      'avatarUrl': ?avatarUrl,
     });
     return resp.data;
   }
@@ -150,9 +150,9 @@ class ApiService {
     String? address, double? latitude, double? longitude,
   }) async {
     final resp = await _dio.put('/users/me/customer', data: {
-      if (address != null) 'address': address,
-      if (latitude != null) 'latitude': latitude,
-      if (longitude != null) 'longitude': longitude,
+      'address': ?address,
+      'latitude': ?latitude,
+      'longitude': ?longitude,
     });
     return resp.data;
   }
@@ -173,7 +173,7 @@ class ApiService {
 
   Future<List<dynamic>> getWorkers({String? categoryId, bool? available}) async {
     final resp = await _dio.get('/users/workers', queryParameters: {
-      if (categoryId != null) 'categoryId': categoryId,
+      'categoryId': ?categoryId,
       if (available != null) 'available': available.toString(),
     });
     return resp.data['workers'] as List;
@@ -184,6 +184,16 @@ class ApiService {
     return resp.data['worker'];
   }
 
+  // ══ UPLOAD ══
+
+  Future<List<String>> uploadImages(List<String> base64Images, {String folder = 'doer/jobs'}) async {
+    final resp = await _dio.post('/upload/multiple', data: {
+      'images': base64Images,
+      'folder': folder,
+    });
+    return List<String>.from(resp.data['urls']);
+  }
+
   // ══ JOBS ══
 
   Future<Map<String, dynamic>> createJob({
@@ -191,27 +201,46 @@ class ApiService {
     required String description,
     required String categoryId,
     double? price,
+    double? budgetMin,
+    double? budgetMax,
+    String? urgency,
     double? latitude,
     double? longitude,
     String? address,
     String? scheduledAt,
+    List<String>? imageUrls,
   }) async {
     final resp = await _dio.post('/jobs', data: {
       'title': title,
       'description': description,
       'categoryId': categoryId,
       if (price != null) 'price': price,
+      if (budgetMin != null) 'budgetMin': budgetMin,
+      if (budgetMax != null) 'budgetMax': budgetMax,
+      if (urgency != null) 'urgency': urgency,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
       if (address != null) 'address': address,
+      if (imageUrls != null && imageUrls.isNotEmpty) 'imageUrls': imageUrls,
       if (scheduledAt != null) 'scheduledAt': scheduledAt,
+
     });
+    return resp.data;
+  }
+
+  Future<List<dynamic>> getJobMatches(String jobId) async {
+    final resp = await _dio.get('/jobs/$jobId/matches');
+    return resp.data['matches'] as List;
+  }
+
+  Future<Map<String, dynamic>> closeJob(String id) async {
+    final resp = await _dio.patch('/jobs/$id/close');
     return resp.data;
   }
 
   Future<Map<String, dynamic>> getMyJobs({String? status}) async {
     final resp = await _dio.get('/jobs/my', queryParameters: {
-      if (status != null) 'status': status,
+      'status': ?status,
     });
     return resp.data;
   }
@@ -227,11 +256,12 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> reviewJob(String jobId, {
-    required int rating, String? comment,
+    required int rating, String? comment, List<String>? photoUrls,
   }) async {
     final resp = await _dio.post('/jobs/$jobId/review', data: {
       'rating': rating,
       if (comment != null) 'comment': comment,
+      if (photoUrls != null && photoUrls.isNotEmpty) 'photoUrls': photoUrls,
     });
     return resp.data;
   }
@@ -276,6 +306,24 @@ class ApiService {
 
   Future<Map<String, dynamic>> createPayment(String jobId) async {
     final resp = await _dio.post('/payments/$jobId');
+    return resp.data;
+  }
+
+  Future<Map<String, dynamic>> releasePayment(String jobId) async {
+    final resp = await _dio.post('/payments/$jobId/release');
+    return resp.data;
+  }
+
+  Future<Map<String, dynamic>> raiseDispute(String jobId, {
+    required String reason,
+    required String description,
+    List<String>? evidence,
+  }) async {
+    final resp = await _dio.post('/payments/$jobId/dispute', data: {
+      'reason': reason,
+      'description': description,
+      if (evidence != null) 'evidence': evidence,
+    });
     return resp.data;
   }
 

@@ -53,7 +53,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                       onRefresh: _fetch,
                       child: ListView.separated(
                         itemCount: _conversations.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
+                        separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
                         itemBuilder: (context, index) {
                           final conv = _conversations[index];
                           final other = conv['otherUser'];
@@ -288,7 +288,7 @@ class _Message {
 
 class _MessageBubble extends StatelessWidget {
   final _Message message;
-  const _MessageBubble({super.key, required this.message});
+  const _MessageBubble({required this.message});
 
   @override
   Widget build(BuildContext context) {

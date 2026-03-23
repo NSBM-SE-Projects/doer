@@ -83,7 +83,7 @@ class ApiService {
       'email': email,
       'password': password,
       'name': name,
-      if (phone != null) 'phone': phone,
+      'phone': ?phone,
       'role': 'WORKER',
     });
     final jwt = resp.data['token'] as String;
@@ -163,9 +163,9 @@ class ApiService {
     String? avatarUrl,
   }) async {
     final resp = await _dio.put('/users/me', data: {
-      if (name != null) 'name': name,
-      if (phone != null) 'phone': phone,
-      if (avatarUrl != null) 'avatarUrl': avatarUrl,
+      'name': ?name,
+      'phone': ?phone,
+      'avatarUrl': ?avatarUrl,
     });
     return resp.data;
   }
@@ -179,13 +179,67 @@ class ApiService {
     List<String>? categoryIds,
   }) async {
     final resp = await _dio.put('/users/me/worker', data: {
-      if (bio != null) 'bio': bio,
-      if (isAvailable != null) 'isAvailable': isAvailable,
-      if (latitude != null) 'latitude': latitude,
-      if (longitude != null) 'longitude': longitude,
-      if (nicNumber != null) 'nicNumber': nicNumber,
-      if (categoryIds != null) 'categoryIds': categoryIds,
+      'bio': ?bio,
+      'isAvailable': ?isAvailable,
+      'latitude': ?latitude,
+      'longitude': ?longitude,
+      'nicNumber': ?nicNumber,
+      'categoryIds': ?categoryIds,
     });
+    return resp.data;
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // VERIFICATION / DOCUMENTS
+  // ════════════════════════════════════════════════════════════
+
+  /// Upload verification documents (NIC front/back, background check, qualifications)
+  Future<Map<String, dynamic>> uploadVerificationDocuments({
+    String? nicFrontPath,
+    String? nicBackPath,
+    String? backgroundCheckPath,
+    List<String>? qualificationPaths,
+  }) async {
+    final formData = FormData();
+
+    if (nicFrontPath != null) {
+      formData.files.add(MapEntry(
+        'nicFront',
+        await MultipartFile.fromFile(nicFrontPath, filename: 'nic_front.jpg'),
+      ));
+    }
+    if (nicBackPath != null) {
+      formData.files.add(MapEntry(
+        'nicBack',
+        await MultipartFile.fromFile(nicBackPath, filename: 'nic_back.jpg'),
+      ));
+    }
+    if (backgroundCheckPath != null) {
+      formData.files.add(MapEntry(
+        'backgroundCheck',
+        await MultipartFile.fromFile(backgroundCheckPath, filename: 'background_check.jpg'),
+      ));
+    }
+    if (qualificationPaths != null) {
+      for (final path in qualificationPaths) {
+        formData.files.add(MapEntry(
+          'qualifications',
+          await MultipartFile.fromFile(path, filename: path.split('/').last),
+        ));
+      }
+    }
+
+    final resp = await _dio.post(
+      '/users/me/worker/documents',
+      data: formData,
+      options: Options(contentType: 'multipart/form-data'),
+    );
+    return resp.data;
+  }
+
+  /// Get current verification status, badge level, documents, and next badge info
+  Future<Map<String, dynamic>> getVerificationStatus() async {
+    final resp = await _dio.get('/users/me/worker/verification');
     return resp.data;
   }
 
@@ -204,14 +258,14 @@ class ApiService {
 
   Future<List<dynamic>> getAvailableJobs({String? categoryId}) async {
     final resp = await _dio.get('/jobs/available', queryParameters: {
-      if (categoryId != null) 'categoryId': categoryId,
+      'categoryId': ?categoryId,
     });
     return resp.data['jobs'] as List;
   }
 
   Future<Map<String, dynamic>> getMyJobs({String? status}) async {
     final resp = await _dio.get('/jobs/my', queryParameters: {
-      if (status != null) 'status': status,
+      'status': ?status,
     });
     return resp.data;
   }
@@ -292,14 +346,30 @@ class ApiService {
     return resp.data['payments'] as List;
   }
 
+  Future<Map<String, dynamic>> getEarnings() async {
+    final resp = await _dio.get('/payments/earnings');
+    return resp.data;
+  }
+
+  Future<Map<String, dynamic>> respondToDispute(String jobId, {
+    required String response,
+    List<String>? evidence,
+  }) async {
+    final resp = await _dio.post('/payments/$jobId/dispute/respond', data: {
+      'response': response,
+      if (evidence != null) 'evidence': evidence,
+    });
+    return resp.data;
+  }
+
   // ════════════════════════════════════════════════════════════
   // APPLICATIONS
   // ════════════════════════════════════════════════════════════
 
   Future<Map<String, dynamic>> applyToJob(String jobId, {String? message, double? price}) async {
     final resp = await _dio.post('/applications/$jobId', data: {
-      if (message != null) 'message': message,
-      if (price != null) 'price': price,
+      'message': ?message,
+      'price': ?price,
     });
     return resp.data;
   }
@@ -347,6 +417,50 @@ class ApiService {
   Future<Map<String, dynamic>> getAgoraToken(String channelName) async {
     final resp = await _dio.get('/agora/token', queryParameters: {'channelName': channelName});
     return resp.data;
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // UPLOAD
+  // ════════════════════════════════════════════════════════════
+
+  Future<List<String>> uploadImages(List<String> base64Images, {String folder = 'doer'}) async {
+    final resp = await _dio.post('/upload/multiple', data: {
+      'images': base64Images,
+      'folder': folder,
+    });
+    return List<String>.from(resp.data['urls']);
+  }
+
+  Future<String> uploadImage(String base64Image, {String folder = 'doer'}) async {
+    final resp = await _dio.post('/upload', data: {
+      'image': base64Image,
+      'folder': folder,
+    });
+    return resp.data['url'];
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // PORTFOLIO
+  // ════════════════════════════════════════════════════════════
+
+  Future<List<dynamic>> getPortfolio(String workerId) async {
+    final resp = await _dio.get('/portfolio/$workerId');
+    return resp.data['portfolio'] as List;
+  }
+
+  Future<Map<String, dynamic>> addPortfolioItem({
+    required String imageUrl, String? caption, String? categoryId,
+  }) async {
+    final resp = await _dio.post('/portfolio', data: {
+      'imageUrl': imageUrl,
+      if (caption != null) 'caption': caption,
+      if (categoryId != null) 'categoryId': categoryId,
+    });
+    return resp.data['item'];
+  }
+
+  Future<void> deletePortfolioItem(String id) async {
+    await _dio.delete('/portfolio/$id');
   }
 
   // ════════════════════════════════════════════════════════════
