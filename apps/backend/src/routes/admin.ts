@@ -591,4 +591,144 @@ router.get(
   })
 );
 
+// ---------------------------------------------------------------------------
+// MATCHING DEMO ENDPOINTS
+// ---------------------------------------------------------------------------
+
+// GET /admin/matching/workers — get all workers with locations for map display
+router.get(
+  '/matching/workers',
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const workers = await prisma.workerProfile.findMany({
+      where: { latitude: { not: null }, longitude: { not: null } },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        categories: { include: { category: true } },
+      },
+    });
+
+    // Check Redis presence for each worker
+    const redisClient = (await import('../config/redis')).default;
+    const workersWithPresence = await Promise.all(
+      workers.map(async (w) => {
+        const status = await redisClient.get(`worker:status:${w.id}`);
+        const locationRaw = await redisClient.get(`worker:location:${w.id}`);
+        const liveLocation = locationRaw ? JSON.parse(locationRaw) : null;
+        return {
+          ...w,
+          presence: status || 'offline',
+          liveLocation,
+        };
+      })
+    );
+
+    res.json({ workers: workersWithPresence });
+  })
+);
+
+// POST /admin/matching/simulate — seed Redis presence for all workers with locations
+router.post(
+  '/matching/simulate',
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const workers = await prisma.workerProfile.findMany({
+      where: {
+        latitude: { not: null },
+        longitude: { not: null },
+        isAvailable: true,
+      },
+      select: { id: true, latitude: true, longitude: true },
+    });
+
+    const redisClient = (await import('../config/redis')).default;
+    const TTL = 35 * 60; // 35 minutes
+
+    for (const w of workers) {
+      await redisClient.set(`worker:status:${w.id}`, 'online', { EX: TTL });
+      await redisClient.set(
+        `worker:location:${w.id}`,
+        JSON.stringify({ lat: w.latitude, lng: w.longitude }),
+        { EX: TTL }
+      );
+    }
+
+    res.json({ message: `Simulated presence for ${workers.length} workers`, count: workers.length });
+  })
+);
+
+// POST /admin/matching/run/:jobId — simulate presence + trigger matching
+router.post(
+  '/matching/run/:jobId',
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const jobId = req.params.id || req.params.jobId;
+
+    const job = await prisma.job.findUnique({
+      where: { id: jobId as string },
+      include: { category: true },
+    });
+    if (!job) throw AppError.notFound('Job not found');
+
+    // Simulate presence first
+    const workers = await prisma.workerProfile.findMany({
+      where: {
+        latitude: { not: null },
+        longitude: { not: null },
+        isAvailable: true,
+      },
+      select: { id: true, latitude: true, longitude: true },
+    });
+
+    const redisClient = (await import('../config/redis')).default;
+    const TTL = 35 * 60;
+    for (const w of workers) {
+      await redisClient.set(`worker:status:${w.id}`, 'online', { EX: TTL });
+      await redisClient.set(
+        `worker:location:${w.id}`,
+        JSON.stringify({ lat: w.latitude, lng: w.longitude }),
+        { EX: TTL }
+      );
+    }
+
+    // Run matching
+    const { matchWorkersForJob } = await import('../services/matching.service');
+    const result = await matchWorkersForJob(jobId as string);
+
+    // Fetch full match details
+    const matches = await prisma.jobMatch.findMany({
+      where: { jobId: jobId as string },
+      include: {
+        worker: {
+          include: {
+            user: { select: { id: true, name: true } },
+            categories: { include: { category: true } },
+          },
+        },
+      },
+      orderBy: { matchScore: 'desc' },
+    });
+
+    res.json({ job, matches, simulatedWorkers: workers.length });
+  })
+);
+
+// GET /admin/matching/jobs — get jobs with locations for demo picker
+router.get(
+  '/matching/jobs',
+  asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const jobs = await prisma.job.findMany({
+      where: {
+        latitude: { not: null },
+        longitude: { not: null },
+        status: { in: ['OPEN', 'APPLICATIONS_RECEIVED'] },
+      },
+      include: {
+        category: true,
+        customer: { include: { user: { select: { name: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+    res.json({ jobs });
+  })
+);
+
 export default router;

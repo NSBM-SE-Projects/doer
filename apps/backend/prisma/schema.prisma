@@ -41,8 +41,48 @@ enum ApplicationStatus {
 enum VerificationStatus {
   NOT_SUBMITTED
   PENDING
+  AI_PASSED
+  AI_FLAGGED
+  AI_REJECTED
   VERIFIED
   REJECTED
+}
+
+enum PaymentStatus {
+  PENDING
+  HELD
+  RELEASED
+  DISPUTED
+  REFUNDED
+  COMPLETED
+}
+
+enum MatchStatus {
+  PENDING
+  NOTIFIED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum ComplexityLevel {
+  SIMPLE
+  MODERATE
+  COMPLEX
+  EXPERT
+}
+
+enum EstimationMethod {
+  RULE_BASED
+  HISTORICAL_AVG
+  WEIGHTED_REGRESSION
+}
+
+enum EstimationTier {
+  PERFECT
+  GREAT
+  GOOD
+  FAIR
 }
 
 enum BadgeLevel {
@@ -101,9 +141,14 @@ model WorkerProfile {
   badgeLevel             BadgeLevel         @default(TRAINEE)
   rejectionReason        String?
   verificationStatus     VerificationStatus @default(NOT_SUBMITTED)
+  aiDecision             String?
+  aiConfidenceScore      Float?
+  aiScreeningResult      Json?
+  aiScreenedAt           DateTime?
   isAvailable        Boolean            @default(true)
   rating             Float              @default(0)
   totalJobs          Int                @default(0)
+  completionRate     Float              @default(0)
 
   user               User               @relation(fields: [userId], references: [id])
   categories         WorkerCategory[]
@@ -112,6 +157,7 @@ model WorkerProfile {
   applications       JobApplication[]
   qualificationDocs  QualificationDoc[]
   portfolio          PortfolioItem[]
+  jobMatches         JobMatch[]
 }
 
 model QualificationDoc {
@@ -132,6 +178,9 @@ model ServiceCategory {
   workers     WorkerCategory[]
   portfolioItems PortfolioItem[]
   jobs        Job[]
+
+  durationBaseline CategoryDurationBaseline?
+  durationLogs     JobDurationLog[]
 }
 
 model WorkerCategory {
@@ -175,6 +224,10 @@ model Job {
   review        Review?
   payment       Payment?
   applications  JobApplication[]
+  jobMatches    JobMatch[]
+
+  durationEstimate JobDurationEstimate?
+  durationLog      JobDurationLog?
 }
 
 model JobApplication {
@@ -236,14 +289,110 @@ model Message {
 }
 
 model Payment {
-  id            String   @id @default(cuid())
+  id            String        @id @default(cuid())
   amount        Float
-  status        String   @default("PENDING")
+  status        PaymentStatus @default(PENDING)
   payhereRef    String?
-  createdAt     DateTime @default(now())
+  heldAt        DateTime?
+  releasedAt    DateTime?
+  disputedAt    DateTime?
+  refundedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @default(now()) @updatedAt
 
-  jobId         String   @unique
-  job           Job      @relation(fields: [jobId], references: [id])
+  jobId         String        @unique
+  job           Job           @relation(fields: [jobId], references: [id])
+  dispute       Dispute?
+}
+
+model Dispute {
+  id               String   @id @default(cuid())
+  reason           String
+  description      String
+  customerEvidence String[]
+  workerResponse   String?
+  workerEvidence   String[]
+  resolution       String?
+  resolvedBy       String?
+  resolvedAt       DateTime?
+  createdAt        DateTime @default(now())
+
+  paymentId        String   @unique
+  payment          Payment  @relation(fields: [paymentId], references: [id])
+  raisedBy         String
+}
+
+model JobMatch {
+  id          String      @id @default(cuid())
+  matchScore  Float
+  distanceKm  Float
+  status      MatchStatus @default(PENDING)
+  createdAt   DateTime    @default(now())
+
+  jobId       String
+  workerId    String
+
+  job         Job           @relation(fields: [jobId], references: [id])
+  worker      WorkerProfile @relation(fields: [workerId], references: [id])
+
+  @@unique([jobId, workerId])
+}
+
+model JobDurationEstimate {
+  id                 String           @id @default(cuid())
+  estimatedMinutes   Int
+  confidenceScore    Float
+  delayRiskPercent   Float
+  estimatedStartAt   DateTime?
+  estimatedEndAt     DateTime?
+  complexity         ComplexityLevel  @default(MODERATE)
+  tier               EstimationTier   @default(GOOD)
+  method             EstimationMethod @default(RULE_BASED)
+  dataPointsUsed     Int              @default(0)
+  factors            String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  jobId              String           @unique
+  job                Job              @relation(fields: [jobId], references: [id])
+}
+
+model JobDurationLog {
+  id                  String          @id @default(cuid())
+  actualMinutes       Int
+  estimatedMinutes    Int?
+  complexity          ComplexityLevel
+  urgency             Urgency
+  descriptionKeywords String[]
+  workerTotalJobs     Int
+  workerRating        Float
+  workerBadgeLevel    String
+  isSynthetic         Boolean         @default(false)
+  completedAt         DateTime
+  createdAt           DateTime        @default(now())
+
+  jobId               String          @unique
+  categoryId          String
+  workerId            String?
+
+  job                 Job             @relation(fields: [jobId], references: [id])
+  category            ServiceCategory @relation(fields: [categoryId], references: [id])
+}
+
+model CategoryDurationBaseline {
+  id                    String          @id @default(cuid())
+  defaultMinutes        Int
+  avgMinutes            Float?
+  medianMinutes         Float?
+  stdDevMinutes         Float?
+  p90Minutes            Float?
+  sampleCount           Int             @default(0)
+  complexityMultipliers String?
+  keywordModifiers      String?
+  updatedAt             DateTime        @updatedAt
+
+  categoryId            String          @unique
+  category              ServiceCategory @relation(fields: [categoryId], references: [id])
 }
 
 model Notification {
